@@ -16,7 +16,7 @@ def main():
         try:
             func()
         except Exception as err:
-            print(f"Failed: str(err)")
+            print(f"Failed: {str(err)}")
 
 
 if __name__ == "__main__":
