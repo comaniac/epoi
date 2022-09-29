@@ -33,6 +33,7 @@ def layer_norm():
         "LayerNorm",
     )
 
+
 def dropout_add_ln():
     def compute(input1, input2, weight, bias):
         axis = 2
@@ -82,6 +83,52 @@ def dropout_add_ln():
                 zero_grad=zero_grad,
             ),
         ],
-        "Dropout+LayerNorm",
+        "Dropout+Add+LayerNorm",
     )
 
+
+def bias_gelu():
+    from megatron.model.fused_bias_gelu import bias_gelu_impl
+
+    def gen_inputs(shape, dtype):
+        inp = torch.randn(*shape, dtype=dtype, device="cuda")
+        bias = torch.nn.Parameter(torch.randn(shape[2], dtype=dtype, device="cuda"))
+        return [inp, bias]
+
+    def zero_grad(_, inputs):
+        for inp in inputs:
+            inp.grad = None
+
+    def pt_compute(inp, bias):
+        return F.gelu(inp + bias, approximate="none")
+
+    mega = lambda shape, dtype: bias_gelu_impl
+    pt = lambda shape, dtype: pt_compute
+
+    shapes = [(8, 512, 1024), (8, 512, 768), (16, 512, 1024)]
+    bench(
+        shapes,
+        [
+            BenchConfig(
+                pt, torch.float32, "PyTorch (FP32)", gen_inputs=gen_inputs, zero_grad=zero_grad
+            ),
+            BenchConfig(
+                mega,
+                torch.float32,
+                "Megatron-LM (FP32)",
+                gen_inputs=gen_inputs,
+                zero_grad=zero_grad,
+            ),
+            BenchConfig(
+                pt, torch.float16, "PyTorch (FP16)", gen_inputs=gen_inputs, zero_grad=zero_grad
+            ),
+            BenchConfig(
+                mega,
+                torch.float16,
+                "Megatron-LM (FP16)",
+                gen_inputs=gen_inputs,
+                zero_grad=zero_grad,
+            ),
+        ],
+        "Bias+GeLU",
+    )

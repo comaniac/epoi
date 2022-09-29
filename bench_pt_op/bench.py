@@ -61,17 +61,3 @@ def bench(shapes, configs, label):
 
     compare = benchmark.Compare(results)
     compare.print()
-
-def safe_fail(name="N/A"):
-    def _wrapper(func):
-        @functools.wraps(func)
-        def _inner(*args, **kwargs):
-            try:
-                ret = func(*args, **kwargs)
-            except Exception as err:
-                print(f"Failed to benchmark {name}: {str(err)}")
-                ret = None
-            return ret
-        return _inner
-    return _wrapper
-
