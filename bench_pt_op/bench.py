@@ -45,7 +45,8 @@ def bench(shapes, configs, label):
             }
             if config.backward:
                 for inp in inputs:
-                    inp.requires_grad = True
+                    if inp is not None:
+                        inp.requires_grad = inp.dtype in (torch.float32, torch.float16)
                 global_dict["_run"] = _forward_backward
                 global_dict["grad"] = gen_output_like(func, inputs)
 
@@ -56,8 +57,8 @@ def bench(shapes, configs, label):
                 sub_label=str(shape),
                 description=config.desc,
             )
-            # Benchmark. Note that this implies 500/100=5 warmups.
-            results.append(bencher.timeit(500))
+            # Benchmark. Note that this implies 1000/100=10 warmups.
+            results.append(bencher.timeit(1000))
 
     compare = benchmark.Compare(results)
     compare.print()
