@@ -1,5 +1,6 @@
 """Entry point."""
 from inspect import getmembers, getmodule, isfunction
+import traceback
 
 import argparse
 
@@ -31,7 +32,8 @@ def main():
         try:
             func(args)
         except Exception as err:
-            print(f"Failed: {str(err)}")
+            traceback.print_exc()
+            print(f"Failed to benchmark {name}: {err}")
 
 
 if __name__ == "__main__":

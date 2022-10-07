@@ -19,6 +19,8 @@ def bench(shapes, configs, label):
     def gen_output_like(func, inputs):
         with torch.no_grad():
             out = func(*inputs)
+        if isinstance(out, (list, tuple)):
+            return [torch.rand_like(o) for o in out]
         return torch.rand_like(out)
 
     def _forward_only(func, inputs, grad, zero_grad_fn):
@@ -26,7 +28,7 @@ def bench(shapes, configs, label):
 
     def _forward_backward(func, inputs, grad, zero_grad_fn):
         out = func(*inputs)
-        out.backward(grad)
+        torch.autograd.backward(out, grad)
         zero_grad_fn(func, inputs)
         return out
 
@@ -57,8 +59,8 @@ def bench(shapes, configs, label):
                 sub_label=str(shape),
                 description=config.desc,
             )
-            # Benchmark. Note that this implies 1000/100=10 warmups.
-            results.append(bencher.timeit(1000))
+            # Benchmark. Note that this implies 500/100=5 warmups.
+            results.append(bencher.timeit(500))
 
     compare = benchmark.Compare(results)
     compare.print()
