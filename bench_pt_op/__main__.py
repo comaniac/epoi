@@ -1,7 +1,5 @@
 """Entry point."""
-from inspect import getmembers, getmodule, isfunction
 import traceback
-
 import argparse
 
 from .ops import get_op_list
@@ -12,6 +10,7 @@ def parse_args():
     parser.add_argument("--forward-only", action="store_true", help="Only benchmark forward ops")
     parser.add_argument("--only-run", type=str, help="Only run the ops that contain this string")
     return parser.parse_args()
+
 
 def main():
     args = parse_args()

@@ -15,6 +15,7 @@ from . import torchscript_ops
 from . import struct_opt_ops
 from . import megatron_ops
 
+
 def get_op_list():
     self = sys.modules[__name__]
     funcs = []
