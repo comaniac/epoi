@@ -20,8 +20,10 @@ def bench(shapes, configs, label):
         with torch.no_grad():
             out = func(*inputs)
         if isinstance(out, (list, tuple)):
-            return [torch.rand_like(o) for o in out]
-        return torch.rand_like(out)
+            ret = [torch.rand_like(o) for o in out]
+        else:
+            ret = torch.rand_like(out)
+        return ret
 
     def _forward_only(func, inputs, grad, zero_grad_fn):
         return func(*inputs)
@@ -61,6 +63,11 @@ def bench(shapes, configs, label):
             )
             # Benchmark. Note that this implies 500/100=5 warmups.
             results.append(bencher.timeit(500))
+
+            del bencher
+            del global_dict
+            del inputs
+            torch.cuda.empty_cache()
 
     compare = benchmark.Compare(results)
     compare.print()

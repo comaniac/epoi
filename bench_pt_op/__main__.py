@@ -4,7 +4,7 @@ import traceback
 
 import argparse
 
-from . import ops
+from .ops import get_op_list
 
 
 def parse_args():
@@ -18,13 +18,15 @@ def main():
 
     funcs = []
     selected, total = 0, 0
-    for name, func in getmembers(ops):
-        if isfunction(func) and getmodule(func) == ops:
-            if args.only_run is None or args.only_run in name:
-                funcs.append((name, func))
-                selected += 1
-            total += 1
-    print(f"To run selected {selected}/{total} ops")
+    for name, func in get_op_list():
+        if args.only_run is None or args.only_run in name:
+            print(f"Selected {name}")
+            funcs.append((name, func))
+            selected += 1
+        else:
+            print(f"Skipped {name}")
+        total += 1
+    print(f"Running selected {selected}/{total} ops")
 
     n_func = len(funcs)
     for idx, (name, func) in enumerate(funcs):
