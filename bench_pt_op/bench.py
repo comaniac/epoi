@@ -4,6 +4,7 @@ from typing import Callable
 import torch
 import torch.utils.benchmark as benchmark
 
+GLOBAL_MSGS = set()
 
 @dataclass
 class BenchConfig:
@@ -38,6 +39,12 @@ def bench(shapes, configs, label):
     for shape in shapes:
         for config in configs:
             func = config.init_func(shape, config.dtype)
+            if func is None:  # Skip if failed to initialize.
+                msg = f"Skip {config.desc} due to initialization failure"
+                if msg not in GLOBAL_MSGS:
+                    print(msg)
+                    GLOBAL_MSGS.add(msg)
+                continue
             inputs = config.gen_inputs(shape, config.dtype)
 
             global_dict = {

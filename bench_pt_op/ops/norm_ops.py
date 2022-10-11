@@ -2,14 +2,32 @@
 import torch
 import torch.nn as nn
 
+from .utils import is_available
 from ..bench import BenchConfig, bench
 
-def layer_norm(args):
-    #from apex.normalization import FusedLayerNorm
-    from ..triton_impl.layer_norm import FusedLayerNorm
 
-    def _init(shape, dtype, use_apex):
-        ln = nn.LayerNorm(shape[-1]) if not use_apex else FusedLayerNorm(shape[-1])
+def layer_norm(args):
+    if is_available("apex"):
+        from apex.normalization import FusedLayerNorm as ApexLayerNorm
+    else:
+        ApexLayerNorm = None
+
+    if is_available("triton"):
+        from ..triton_impl.layer_norm import FusedLayerNorm as TritonLayerNorm
+    else:
+        TritonLayerNorm = None
+
+    def _init(shape, dtype, lib="torch"):
+        if lib == "torch":
+            ln = nn.LayerNorm(shape[-1])
+        elif lib == "apex":
+            if ApexLayerNorm is None:
+                return None
+            ln = ApexLayerNorm(shape[-1])
+        elif lib == "triton":
+            if TritonLayerNorm is None:
+                return None
+            ln = TritonLayerNorm(shape[-1])
         if dtype == torch.float16:
             ln = ln.half()
         return ln.cuda()
@@ -18,11 +36,12 @@ def layer_norm(args):
         func.weight.grad = None
         func.bias.grad = None
 
-    pt_norm = lambda shape, dtype: _init(shape, dtype, False)
-    apex_norm = lambda shape, dtype: _init(shape, dtype, True)
+    pt_norm = lambda shape, dtype: _init(shape, dtype, "torch")
+    apex_norm = lambda shape, dtype: _init(shape, dtype, "apex")
+    triton_norm = lambda shape, dtype: _init(shape, dtype, "triton")
 
     # (batch, seq, hidden size)
-    shapes = [(32, 128, 768), (16, 512, 768), (16, 512, 8192), (4, 2048, 8192)]
+    shapes = [(32, 128, 768), (8, 512, 1024), (16, 512, 8192), (4, 2048, 8192)]
     bench(
         shapes,
         [
@@ -38,12 +57,23 @@ def layer_norm(args):
             BenchConfig(
                 apex_norm, torch.float16, "Apex (FP16)", not args.forward_only, zero_grad=zero_grad
             ),
+            BenchConfig(
+                triton_norm,
+                torch.float16,
+                "Triton (FP16)",
+                not args.forward_only,
+                zero_grad=zero_grad,
+            ),
         ],
-        "LayerNorm: PyTorch vs. Apex",
+        "LayerNorm: PyTorch vs. Apex vs. Triton",
     )
 
 
 def megatron_softmax(args):
+    if not is_available("megatron"):
+        print("Megatron-LM is not available. Skip.")
+        return
+
     from megatron import fused_kernels
     from megatron.model.fused_softmax import FusedScaleMaskSoftmax
     from megatron.model.enums import AttnMaskType
