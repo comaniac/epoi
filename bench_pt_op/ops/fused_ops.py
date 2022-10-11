@@ -1,4 +1,4 @@
-"""Torchscript+nvFuser optimized ops."""
+"""Fused Ops."""
 import torch
 import torch.nn.functional as F
 
@@ -80,7 +80,7 @@ def dropout_add_ln(args):
     )
 
 
-def bias_gelu(args):
+def megatron_bias_gelu(args):
     from megatron.model.fused_bias_gelu import bias_gelu_impl
 
     def gen_inputs(shape, dtype):

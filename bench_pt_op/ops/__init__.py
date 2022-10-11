@@ -10,10 +10,9 @@ gigantic model 2:   4,     2048, 64,   8192,   32768,        32008 or 50264 or 2
 from inspect import getmembers, getmodule, isfunction, ismodule
 import sys
 
-from . import apex_ops
-from . import torchscript_ops
-from . import struct_opt_ops
-from . import megatron_ops
+from . import norm_ops
+from . import fused_ops
+from . import layer_ops
 
 
 def get_op_list():
