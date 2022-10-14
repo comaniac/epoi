@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+from matplotlib.ticker import is_decade
 
 import torch
 import torch.nn as nn
@@ -11,6 +12,10 @@ except ImportError:
 
 
 def pt_attention(q, k, v, attn_bias, p=0.0):
+    """The native PyTorch implementation of attention with the same signature as the
+    FlashAttention implemented in xformers. This is used mainly to check the correctness
+    of the xformers implementation, so do not change the functionality of this function.
+    """
     def attention_bmk(q, k, v, attn_bias=None, p=0.0):
         # if isinstance(attn_bias, xformers.ops.AttentionMask):
         #     attn_bias = attn_bias.to_tensor().to(q.dtype)
@@ -114,12 +119,14 @@ class BertSelfAttention(nn.Module):
         assert head_mask is None, "head_mask is not supported for now"
         assert not output_attentions, "output_attentions is not supported for now"
         assert past_key_value is None, "past_key_value is not supported for now"
-        assert not self.is_decoder, "decoder is not supported for now"
 
         mixed_query_layer = self.query(hidden_states)
         key_layer = self.reshape_for_scores(self.key(hidden_states))
         value_layer = self.reshape_for_scores(self.value(hidden_states))
         query_layer = self.reshape_for_scores(mixed_query_layer)
+
+        if self.is_decoder:
+            past_key_value = (key_layer, value_layer)
 
         # If this is instantiated as a cross-attention module, the keys
         # and values come from an encoder; the attention mask needs to be
@@ -140,4 +147,6 @@ class BertSelfAttention(nn.Module):
         context_layer = context_layer.view(new_context_layer_shape)
 
         outputs = (context_layer,)
+        if self.is_decader:
+            outputs = outputs + (past_key_value,)
         return outputs
