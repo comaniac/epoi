@@ -298,7 +298,7 @@ def layer_norm_affine(a, normalized_shape, weight, bias, eps):
     return LayerNorm.apply(a, normalized_shape, weight, bias, eps)
 
 
-class FusedLayerNorm(torch.nn.Module):
+class TritonLayerNorm(torch.nn.Module):
     def __init__(self, normalized_shape, eps=1e-5, elementwise_affine=True):
         super().__init__()
 

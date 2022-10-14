@@ -1,7 +1,8 @@
 """Model structure optimized ops."""
 import torch
 
-from ..bench import BenchConfig, bench
+from .utils import is_available
+from ..bench import BenchConfig, bench, check_correctness
 
 
 def qkv_self_attn(args):
@@ -104,3 +105,123 @@ def qkv_self_attn(args):
         ],
         "QKV in Self-Attention",
     )
+
+
+def attention(args):
+    if not is_available("transformers") or not is_available("xformers"):
+        print("Skip attention because transformers or xformers is not available")
+        return
+
+    from transformers import AutoConfig
+    from transformers.models.bert.modeling_bert import BertSelfAttention
+    from ..impl.xformers_attn import BertSelfAttention as xFormersSelfAttention
+
+    def _init(shape, dtype, attn_type, no_dropout=False):
+        config = AutoConfig.from_pretrained("bert-large-uncased")
+        config.hidden_size = shape[2]
+        config.num_attention_heads = shape[3]
+        config.intermediate_size = shape[4]
+        config.vocab_size = shape[5]
+        if no_dropout:
+            config.attention_probs_dropout_prob = 0.0
+        if attn_type is not None:
+            attn = xFormersSelfAttention(config, attn_op_name=attn_type)
+        else:
+            attn = BertSelfAttention(config)
+        if dtype == torch.float16:
+            attn = attn.half()
+        return attn.cuda()
+
+    def gen_inputs(shape, dtype):
+        # (batch, seq, hidden size)
+        inp_shape = shape[:3]
+        hidden_states = torch.randn(*inp_shape, dtype=dtype, device="cuda")
+        attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
+        return [hidden_states, attn_mask]
+
+    def zero_grad(mod, inputs):
+        inputs[0].grad = None
+        mod.key.weight.grad = None
+        mod.key.bias.grad = None
+        mod.value.weight.grad = None
+        mod.value.bias.grad = None
+        mod.query.weight.grad = None
+        mod.query.bias.grad = None
+
+    def override_params(this, other):
+        this.query.weight = other.query.weight
+        this.query.bias = other.query.bias
+        this.key.weight = other.key.weight
+        this.key.bias = other.key.bias
+        this.value.weight = other.value.weight
+        this.value.bias = other.value.bias
+
+    # (batch, seq, hidden size, #head, intermediate size, vocab size)
+    shapes = [
+        (8, 512, 1024, 16, 4096, 30522),
+        (16, 512, 8192, 64, 32768, 50264),
+        (4, 2048, 8192, 64, 32768, 50264),
+    ]
+    configs = [
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, None),
+            torch.float16,
+            "HF (Attn)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, "base"),
+            torch.float16,
+            "xFormers (FA)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, "cutlass"),
+            torch.float16,
+            "xFormers Cutlass (FA)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, "triton"),
+            torch.float16,
+            "xFormers Triton (FA)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+    ]
+
+    # Check correctness
+    fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
+    fun_xf_base = _init(shapes[0], configs[1].dtype, "base", no_dropout=True)
+    fun_xf_cutlass = _init(shapes[0], configs[1].dtype, "cutlass", no_dropout=True)
+    fun_xf_triton = _init(shapes[0], configs[1].dtype, "triton", no_dropout=True)
+    override_params(fun_xf_base, fun_attn)
+    check_correctness(
+        shapes[0], fun_attn, fun_xf_base, configs[0], tol=1e-3, desc="xFormers FlashAttn"
+    )
+    override_params(fun_xf_cutlass, fun_attn)
+    check_correctness(
+        shapes[0],
+        fun_attn,
+        fun_xf_cutlass,
+        configs[0],
+        tol=1e-3,
+        desc="xFormers Cutlass FlashAttn",
+    )
+    override_params(fun_xf_triton, fun_attn)
+    check_correctness(
+        shapes[0],
+        fun_attn,
+        fun_xf_triton,
+        configs[0],
+        tol=1e-3,
+        desc="xFormers Triton FlashAttn",
+    )
+    bench(shapes, configs, "Attention (Attn) and FlashAttention (FA)")
