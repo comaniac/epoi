@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 from .utils import is_available
-from ..bench import BenchConfig, check_correctness, bench
+from .bencher import BenchConfig, check_correctness, bench
 
 
 def layer_norm(args):
@@ -18,7 +18,7 @@ def layer_norm(args):
         xFormerLayerNorm = lambda k: None
 
     try:
-        from ..impl.triton_layer_norm import TritonLayerNorm
+        from ..ops.triton_layer_norm import TritonLayerNorm
     except ImportError:
         TritonLayerNorm = lambda k: None
 
@@ -89,7 +89,7 @@ def layer_norm(args):
     check_correctness(shapes[0], fun_pt, fun_xformers, configs[2], tol=1e-3, desc="xFormers (FP16)")
 
     # Benchmark
-    bench(shapes, configs, "LayerNorm")
+    bench(shapes, configs, "LayerNorm", verbose=args.verbose)
 
 
 def softmax(args):
@@ -198,4 +198,4 @@ def softmax(args):
     )
 
     # Benchmark
-    bench(shapes, configs, "Softmax with FP16 input")
+    bench(shapes, configs, "Softmax with FP16 input", verbose=args.verbose)

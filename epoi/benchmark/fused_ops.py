@@ -2,7 +2,7 @@
 import torch
 import torch.nn.functional as F
 
-from ..bench import BenchConfig, bench
+from .bencher import BenchConfig, bench
 
 
 def dropout_add_ln(args):
@@ -77,6 +77,7 @@ def dropout_add_ln(args):
             ),
         ],
         "Dropout+Add+LayerNorm",
+        verbose=args.verbose
     )
 
 

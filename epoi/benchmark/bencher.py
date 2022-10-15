@@ -20,6 +20,35 @@ class BenchConfig:
         return f"BenchConfig({self.desc}, {self.dtype})"
 
 
+@dataclass
+class MemoryMeasurement:
+    desc: str
+    shape: str
+    memory: float
+
+    @staticmethod
+    def print(results):
+        from tabulate import tabulate
+
+        descs = {} # Use dict to dedup while preserving order.
+        for result in results:
+            if result.desc not in descs:
+                descs[result.desc] = 1
+        headers = ["Shape"] + list(descs.keys())
+        dict_data = {}
+        for result in results:
+            if result.shape not in dict_data:
+                dict_data[result.shape] = {}
+            dict_data[result.shape][result.desc] = result.memory
+
+        data = []
+        for shape, row in dict_data.items():
+            data.append([shape] + [row[desc] for desc in headers[1:]])
+
+        print(tabulate(data, headers=headers, stralign="center", numalign="center"))
+        print("\nMemory is in MBs.\n")
+
+
 def gen_output_like(func, inputs):
     with torch.no_grad():
         try:
@@ -45,14 +74,16 @@ def _forward_backward(func, inputs, grad, zero_grad_fn=None):
     return out
 
 
-def test_func(func, inputs, grad, zero_grad_fn):
+def test_func(func, inputs, grad, zero_grad_fn, verbose=False):
     try:
         if grad is not None:
             _forward_backward(func, inputs, grad, zero_grad_fn)
         else:
             _forward_only(func, inputs)
         return True
-    except:
+    except Exception as err:
+        if verbose:
+            print(err)
         return False
 
 
@@ -66,8 +97,9 @@ def skip_if(cond, desc):
     return False
 
 
-def bench(shapes, configs, label):
-    results = []
+def bench(shapes, configs, label, verbose=False):
+    perf_results = []
+    memory_results = []
     for shape in shapes:
         for config in configs:
             func = config.init_func(shape, config.dtype)
@@ -76,7 +108,7 @@ def bench(shapes, configs, label):
             inputs = config.gen_inputs(shape, config.dtype)
 
             if skip_if(
-                not test_func(func, inputs, None, config.zero_grad),
+                not test_func(func, inputs, None, config.zero_grad, verbose=verbose),
                 f"correctness checking of {config.desc}",
             ):
                 continue
@@ -98,7 +130,9 @@ def bench(shapes, configs, label):
                 global_dict["grad"] = gen_output_like(func, inputs)
 
                 if skip_if(
-                    not test_func(func, inputs, global_dict["grad"], config.zero_grad),
+                    not test_func(
+                        func, inputs, global_dict["grad"], config.zero_grad, verbose=verbose
+                    ),
                     f"correctness checking of {config.desc}",
                 ):
                     continue
@@ -113,26 +147,27 @@ def bench(shapes, configs, label):
             # Benchmark. Note that this implies 500/100=5 warmups.
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
-            results.append(bencher.timeit(500))
+            perf_results.append(bencher.timeit(500))
             memory = torch.cuda.max_memory_allocated() / 2**20
-            print(f"{shape}, {config} memory usage: {memory:.2f} MB", flush=True)
+            memory_results.append(MemoryMeasurement(config.desc, str(shape), memory))
 
             del bencher
             del global_dict
             del inputs
             torch.cuda.empty_cache()
 
-    compare = benchmark.Compare(results)
+    compare = benchmark.Compare(perf_results)
     compare.print()
+    MemoryMeasurement.print(memory_results)
 
 
-def check_correctness(shape, func_ref, func, config, tol=1e-5, desc=""):
+def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=False):
     if func is None or func_ref is None:
         print(f"Skip correctness for {desc} due to initialization failure")
         return
 
     inputs = config.gen_inputs(shape, config.dtype)
-    if skip_if(not test_func(func, inputs, None, config.zero_grad), f"{desc}"):
+    if skip_if(not test_func(func, inputs, None, config.zero_grad, verbose=verbose), f"{desc}"):
         return
 
     if config.backward:
@@ -145,7 +180,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc=""):
         config.zero_grad(func_ref, inputs)
 
         if skip_if(
-            not test_func(func, inputs, grads_input, config.zero_grad),
+            not test_func(func, inputs, grads_input, config.zero_grad, verbose=verbose),
             f"{desc}",
         ):
             return

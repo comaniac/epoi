@@ -1,18 +1,37 @@
 """Entry point."""
-import traceback
 import argparse
+import sys
+import traceback
+from inspect import getmembers, getmodule, isfunction, ismodule
 
-from .ops import get_op_list
+from . import fused_ops, layer_ops, norm_ops
+
+
+def get_case_list():
+    self = sys.modules[__name__]
+    funcs = []
+    for name, mod in getmembers(self):
+        if not ismodule(mod) or not name.endswith("ops"):
+            continue
+        for name, func in getmembers(mod):
+            if isfunction(func) and getmodule(func) == mod:
+                funcs.append((name, func))
+    return funcs
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Benchmark Efficient PyTorch Ops")
     parser.add_argument("--forward-only", action="store_true", help="Only benchmark forward ops")
     parser.add_argument(
         "--only-run",
         type=str,
         help="Only run the ops that contain this string."
         "You can use ',' to separate multiple strings",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print error messages when failures",
     )
     return parser.parse_args()
 
@@ -29,7 +48,7 @@ def main():
 
     funcs = []
     selected, total = 0, 0
-    for name, func in get_op_list():
+    for name, func in get_case_list():
         if select(only_run, name):
             print(f"Selected {name}")
             funcs.append((name, func))
@@ -37,7 +56,7 @@ def main():
         else:
             print(f"Skipped {name}")
         total += 1
-    print(f"Running selected {selected}/{total} ops")
+    print(f"Running selected {selected}/{total} cases")
 
     n_func = len(funcs)
     for idx, (name, func) in enumerate(funcs):
