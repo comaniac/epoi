@@ -79,16 +79,16 @@ Skip correctness checking of xFormers Triton (FA) due to forward failure
                                          |  HF (Attn)  |  xFormers Cutlass (FA)
 1 threads: --------------------------------------------------------------------
       (8, 512, 1024, 16, 4096, 30522)    |      4.1    |            2.7
-      (16, 512, 8192, 64, 32768, 50264)  |    135.3    |          129.5
+      (16, 512, 8192, 64, 32768, 50264)  |    134.8    |          129.5
       (4, 2048, 8192, 64, 32768, 50264)  |    198.2    |          195.4
 
 Times are in milliseconds (ms).
 
-              Shape                 xFormers Cutlass (FA)    HF (Attn)
----------------------------------  -----------------------  -----------
- (8, 512, 1024, 16, 4096, 30522)           124.27             316.027
-(16, 512, 8192, 64, 32768, 50264)          1672.07            3462.08
-(4, 2048, 8192, 64, 32768, 50264)          3208.07            9350.08
+              Shape                 HF (Attn)    xFormers Cutlass (FA)
+---------------------------------  -----------  -----------------------
+ (8, 512, 1024, 16, 4096, 30522)     316.027            124.27
+(16, 512, 8192, 64, 32768, 50264)    3462.08            1672.07
+(4, 2048, 8192, 64, 32768, 50264)    9350.08            3208.07
 
 Memory is in MBs.
 
@@ -99,45 +99,68 @@ Correctness checking for xFormers (FP16) is passed
 [---------------------------------------------------------- LayerNorm ----------------------------------------------------------]
                        |  PyTorch (FP32)  |  Apex (FP32)  |  PyTorch (FP16)  |  Apex (FP16)  |  Triton (FP16)  |  xFormers (FP16)
 1 threads: ----------------------------------------------------------------------------------------------------------------------
-      (32, 128, 768)   |       194.6      |      205.6    |       138.6      |      204.0    |       707.4     |        844.9
-      (8, 512, 1024)   |       251.0      |      232.6    |       136.9      |      202.8    |       719.4     |        821.1
-      (16, 512, 8192)  |      4574.2      |     4297.5    |      2309.2      |     2482.4    |      2102.0     |       1420.8
-      (4, 2048, 8192)  |      4465.6      |     4300.8    |      2307.9      |     2501.9    |      2095.6     |       1419.5
+      (32, 128, 768)   |       203.7      |      213.7    |       147.0      |      216.3    |       749.1     |        866.7
+      (8, 512, 1024)   |       250.8      |      232.7    |       146.6      |      213.8    |       751.3     |        871.7
+      (16, 512, 8192)  |      4523.8      |     4287.9    |      2340.0      |     2470.8    |      2102.1     |       1424.1
+      (4, 2048, 8192)  |      4453.7      |     4274.0    |      2296.6      |     2527.1    |      2088.3     |       1420.3
 
 Times are in microseconds (us).
 
-     Shape        PyTorch (FP16)    PyTorch (FP32)    xFormers (FP16)    Triton (FP16)    Apex (FP16)    Apex (FP32)
----------------  ----------------  ----------------  -----------------  ---------------  -------------  -------------
-(32, 128, 768)       30.0488           60.0547            30.8008           30.0488         30.1426        60.1484
-(8, 512, 1024)       40.0508           80.0586            41.0527           40.0508         40.1758        80.1836
-(16, 512, 8192)      640.137            1280.2            642.137           640.137         641.137        1281.2
-(4, 2048, 8192)      640.137            1280.2            642.137           640.137         641.137        1281.2
+     Shape        PyTorch (FP32)    Apex (FP32)    PyTorch (FP16)    Apex (FP16)    Triton (FP16)    xFormers (FP16)
+---------------  ----------------  -------------  ----------------  -------------  ---------------  -----------------
+(32, 128, 768)       60.0547          60.1484         30.0488          30.1426         30.0488           30.8008
+(8, 512, 1024)       80.0586          80.1836         40.0508          40.1758         40.0508           41.0527
+(16, 512, 8192)       1280.2          1281.2          640.137          641.137         640.137           642.137
+(4, 2048, 8192)       1280.2          1281.2          640.137          641.137         640.137           642.137
 
 Memory is in MBs.
 
 [3/3] Benchmarking softmax
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
+Building extension module scaled_upper_triang_masked_softmax_cuda...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module scaled_upper_triang_masked_softmax_cuda...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
+Building extension module scaled_masked_softmax_cuda...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module scaled_masked_softmax_cuda...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
+Building extension module scaled_softmax_cuda...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module scaled_softmax_cuda...
+Detected CUDA files, patching ldflags
+Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
+Building extension module fused_mix_prec_layer_norm_cuda...
+Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
+ninja: no work to do.
+Loading extension module fused_mix_prec_layer_norm_cuda...
 Correctness checking for Megatron-LM (Comp-FP32) (backward) is failed: Tensor-likes are not close!
 
-Mismatched elements: 2047251 / 16777216 (12.2%)
-Greatest absolute difference: 0.0552825927734375 at index (2, 13, 150, 350) (up to 0.001 allowed)
-Greatest relative difference: 1.1963111760409058 at index (2, 13, 150, 224) (up to 0.001 allowed)
+Mismatched elements: 2044451 / 16777216 (12.2%)
+Greatest absolute difference: 0.047679901123046875 at index (2, 14, 373, 375) (up to 0.001 allowed)
+Greatest relative difference: 1.0947146866230122 at index (2, 14, 373, 432) (up to 0.001 allowed)
 Correctness checking for Megatron-LM (Comp-FP32) is passed
 Correctness checking for xFormers (Comp-FP32) is passed
 [------------------------------------ Softmax with FP16 input -------------------------------------]
                          |  PyTorch (Comp-FP32)  |  Megatron-LM (Comp-FP32)  |  xFormers (Comp-FP32)
 1 threads: -----------------------------------------------------------------------------------------
-      (4, 16, 512, 512)  |         1179.3        |           293.9           |         418.4
-      (8, 16, 512, 512)  |         2325.7        |           579.7           |         434.0
+      (4, 16, 512, 512)  |         1179.0        |           293.6           |         447.4
+      (8, 16, 512, 512)  |         2325.3        |           579.3           |         446.2
 
 Times are in microseconds (us).
 
-      Shape         xFormers (Comp-FP32)    Megatron-LM (Comp-FP32)    PyTorch (Comp-FP32)
------------------  ----------------------  -------------------------  ---------------------
-(4, 16, 512, 512)           656                       720                      944
-(8, 16, 512, 512)           384                       848                     1296
+      Shape         PyTorch (Comp-FP32)    Megatron-LM (Comp-FP32)    xFormers (Comp-FP32)
+-----------------  ---------------------  -------------------------  ----------------------
+(4, 16, 512, 512)           944                      720                      656
+(8, 16, 512, 512)          1296                      848                      848
 
 Memory is in MBs.
-
 ```
 
 ## Add an Operator
