@@ -81,8 +81,8 @@ def dropout_add_ln(args):
     )
 
 
-def megatron_bias_gelu(args):
-    from megatron.model.fused_bias_gelu import bias_gelu_impl
+def bias_gelu(args):
+    from ..ops.torchscript_ops import fused_bias_gelu
 
     def gen_inputs(shape, dtype):
         inp = torch.randn(*shape, dtype=dtype, device="cuda")
@@ -96,7 +96,7 @@ def megatron_bias_gelu(args):
     def pt_compute(inp, bias):
         return F.gelu(inp + bias, approximate="none")
 
-    mega = lambda shape, dtype: bias_gelu_impl
+    fused = lambda shape, dtype: fused_bias_gelu
     pt = lambda shape, dtype: pt_compute
 
     # (batch, seq, intermediate or hidden size)
@@ -115,15 +115,15 @@ def megatron_bias_gelu(args):
             BenchConfig(
                 pt,
                 torch.float32,
-                "PyTorch (FP32)",
+                "Eager (FP32)",
                 not args.forward_only,
                 gen_inputs=gen_inputs,
                 zero_grad=zero_grad,
             ),
             BenchConfig(
-                mega,
+                fused,
                 torch.float32,
-                "Megatron-LM (FP32)",
+                "TS+nvFuser (FP32)",
                 not args.forward_only,
                 gen_inputs=gen_inputs,
                 zero_grad=zero_grad,
@@ -131,19 +131,20 @@ def megatron_bias_gelu(args):
             BenchConfig(
                 pt,
                 torch.float16,
-                "PyTorch (FP16)",
+                "Eager (FP16)",
                 not args.forward_only,
                 gen_inputs=gen_inputs,
                 zero_grad=zero_grad,
             ),
             BenchConfig(
-                mega,
+                fused,
                 torch.float16,
-                "Megatron-LM (FP16)",
+                "TS+nvFuser (FP16)",
                 not args.forward_only,
                 gen_inputs=gen_inputs,
                 zero_grad=zero_grad,
             ),
         ],
         "Bias+GeLU",
+        verbose=args.verbose,
     )

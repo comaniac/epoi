@@ -80,7 +80,7 @@ class BertSelfAttention(nn.Module):
         else:
             assert xformers is not None, "xformers is not installed"
 
-            if attn_op_name == "base":
+            if attn_op_name == "vanilla":
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp

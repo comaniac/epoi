@@ -173,7 +173,7 @@ def bert_attention(args):
             zero_grad=zero_grad,
         ),
         BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "base"),
+            lambda shape, dtype: _init(shape, dtype, "vanilla"),
             torch.float16,
             "xFormers (FA)",
             not args.forward_only,
@@ -200,7 +200,7 @@ def bert_attention(args):
 
     # Check correctness
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    fun_xf_base = _init(shapes[0], configs[1].dtype, "base", no_dropout=True)
+    fun_xf_base = _init(shapes[0], configs[1].dtype, "vanilla", no_dropout=True)
     fun_xf_cutlass = _init(shapes[0], configs[1].dtype, "cutlass", no_dropout=True)
     fun_xf_triton = _init(shapes[0], configs[1].dtype, "triton", no_dropout=True)
     override_params(fun_xf_base, fun_attn)
@@ -210,7 +210,7 @@ def bert_attention(args):
         fun_xf_base,
         configs[0],
         tol=1e-3,
-        desc="xFormers FlashAttn",
+        desc="xFormers Vanilla FlashAttn",
         verbose=args.verbose,
     )
     override_params(fun_xf_cutlass, fun_attn)
@@ -233,7 +233,12 @@ def bert_attention(args):
         desc="xFormers Triton FlashAttn",
         verbose=args.verbose,
     )
-    bench(shapes, configs, "Attention (Attn) and FlashAttention (FA)", verbose=args.verbose)
+    bench(
+        shapes,
+        configs,
+        "Attention (Attn) and FlashAttention (FA) without mask",
+        verbose=args.verbose,
+    )
 
 
 def gpt_attention(args):
