@@ -48,12 +48,12 @@ class FusedBiasGELU(torch.nn.Module):
         self.reset_parameters(prev_weight)
 
     def reset_parameters(self, prev_weight=None):
+        range = (0, 1)
         if prev_weight is not None:
             fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(prev_weight)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-            torch.nn.init.uniform_(self.bias, -bound, bound)
-        else:
-            torch.nn.init.kaiming_uniform_(self.bias, a=math.sqrt(5))
+            range = (-bound, bound)
+        torch.nn.init.uniform_(self.bias, *range)
 
     def forward(self, input):
         if self.fused:
