@@ -1,33 +1,29 @@
 """Fused Ops."""
 import torch
-import torch.nn.functional as F
 
 from .bencher import BenchConfig, bench
+from ..ops.torchscript_ops import FusedDropoutAddLayerNorm, FusedBiasGELU
 
 
 def dropout_add_ln(args):
-    def compute(input1, input2, weight, bias):
-        axis = 2
+    def _init(shape, dtype, fused):
         dropout_prob = 0.1
-        dropout_out = F.dropout(input1, dropout_prob, training=True)
-        norm_input = dropout_out + input2
-        norm_output = F.layer_norm(norm_input, (input1.size(axis),), weight, bias)
-        return norm_output
-
-    def gen_inputs(shape, dtype):
-        input1 = torch.randn(*shape, dtype=dtype, device="cuda")
-        input2 = torch.rand_like(input1)
-
-        weight = torch.nn.Parameter(torch.randn(shape[2], dtype=dtype, device="cuda"))
-        bias = torch.nn.Parameter(torch.randn(shape[2], dtype=dtype, device="cuda"))
-        return [input1, input2, weight, bias]
+        mod = FusedDropoutAddLayerNorm(shape[-1], dropout_prob, fused=fused)
+        if dtype == torch.float16:
+            mod = mod.half()
+        return mod.cuda()
 
     def zero_grad(_, inputs):
         for inp in inputs:
             inp.grad = None
 
-    eager = lambda shape, dtype: compute
-    ts_nvfuser = lambda shape, dtype: torch.jit.script(compute)
+    def gen_inputs(shape, dtype):
+        input1 = torch.randn(*shape, dtype=dtype, device="cuda")
+        input2 = torch.rand_like(input1)
+        return [input1, input2]
+
+    eager = lambda shape, dtype: _init(shape, dtype, fused=False)
+    ts_nvfuser = lambda shape, dtype: _init(shape, dtype, fused=True)
 
     # (batch, seq, intermediate or hidden size)
     shapes = [
@@ -77,27 +73,27 @@ def dropout_add_ln(args):
             ),
         ],
         "Dropout+Add+LayerNorm",
-        verbose=args.verbose
+        verbose=args.verbose,
     )
 
 
 def bias_gelu(args):
-    from ..ops.torchscript_ops import fused_bias_gelu
+    def _init(shape, dtype, fused):
+        mod = FusedBiasGELU(shape[-1], fused=fused)
+        if dtype == torch.float16:
+            mod = mod.half()
+        return mod.cuda()
 
     def gen_inputs(shape, dtype):
         inp = torch.randn(*shape, dtype=dtype, device="cuda")
-        bias = torch.nn.Parameter(torch.randn(shape[2], dtype=dtype, device="cuda"))
-        return [inp, bias]
+        return [inp]
 
     def zero_grad(_, inputs):
         for inp in inputs:
             inp.grad = None
 
-    def pt_compute(inp, bias):
-        return F.gelu(inp + bias, approximate="none")
-
-    fused = lambda shape, dtype: fused_bias_gelu
-    pt = lambda shape, dtype: pt_compute
+    fused = lambda shape, dtype: _init(shape, dtype, fused=True)
+    pt = lambda shape, dtype: _init(shape, dtype, fused=False)
 
     # (batch, seq, intermediate or hidden size)
     shapes = [

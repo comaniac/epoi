@@ -1,6 +1,8 @@
 """The fused ops by torchscript."""
+from typing import List
 import math
 import torch
+import torch.nn.functional as F
 
 
 class BiasGeLUFunction(torch.autograd.Function):
@@ -37,14 +39,12 @@ class BiasGeLUFunction(torch.autograd.Function):
         return tmp, tmp
 
 
-fused_bias_gelu = BiasGeLUFunction.apply
-
-
 class FusedBiasGELU(torch.nn.Module):
-    def __init__(self, size, device=None, dtype=None, prev_weight=None):
+    def __init__(self, size, device=None, dtype=None, prev_weight=None, fused=True):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.bias = torch.nn.Parameter(torch.empty(size, **factory_kwargs))
+        self.fused = fused
         self.reset_parameters(prev_weight)
 
     def reset_parameters(self, prev_weight=None):
@@ -56,4 +56,48 @@ class FusedBiasGELU(torch.nn.Module):
             torch.nn.init.kaiming_uniform_(self.bias, a=math.sqrt(5))
 
     def forward(self, input):
-        return fused_bias_gelu(input, self.bias)
+        if self.fused:
+            return BiasGeLUFunction.apply(input, self.bias)
+        return F.gelu(input + self.bias, approximate="none")
+
+
+def fused_dropout_add_layernorm(
+    input1,
+    input2,
+    weight,
+    bias,
+    dropout_prob: float,
+    training: bool,
+    normalized_shape: List[int],
+    eps: float,
+):
+    """torchscript tracable fused dropout, add, layernorm.
+    (non-tensor arguments must have type annotations)
+    """
+    dropout_out = F.dropout(input1, dropout_prob, training=training)
+    norm_input = dropout_out + input2
+    norm_output = F.layer_norm(norm_input, normalized_shape, weight, bias, eps)
+    return norm_output
+
+
+class FusedDropoutAddLayerNorm(torch.nn.Module):
+    def __init__(self, size, dropout_prob, eps=1e-5, fused=True):
+        super().__init__()
+        self.layer_norm = torch.nn.LayerNorm(size, eps=eps)
+        self.dropout_prob = dropout_prob
+        self.fused = fused
+
+    def forward(self, input1, input2):
+        func = fused_dropout_add_layernorm
+        func = torch.jit.script(func) if self.fused else func
+
+        return func(
+            input1,
+            input2,
+            self.layer_norm.weight,
+            self.layer_norm.bias,
+            self.dropout_prob,
+            self.training,
+            self.layer_norm.normalized_shape,
+            self.layer_norm.eps,
+        )

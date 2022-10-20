@@ -5,6 +5,9 @@ import traceback
 from inspect import getmembers, getmodule, isfunction, ismodule
 
 from . import fused_ops, layer_ops, norm_ops
+from .utils import get_version_n_commit
+
+LIBS = ["epoi", "torch", "transformers", "xformers", "megatron", "triton", "apex"]
 
 
 def get_case_list():
@@ -42,9 +45,22 @@ def select(only_run, name):
     return any([s in name for s in only_run])
 
 
+def list_versions():
+    from tabulate import tabulate
+
+    data = [[lib] + list(get_version_n_commit(lib)) for lib in LIBS]
+    print(
+        tabulate(
+            data, headers=["Package", "Version", "Commit SHA"], stralign="center", numalign="center"
+        )
+    )
+
+
 def main():
     args = parse_args()
     only_run = None if args.only_run is None else args.only_run.split(",")
+
+    list_versions()
 
     funcs = []
     selected, total = 0, 0
