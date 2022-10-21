@@ -235,10 +235,13 @@ class GPT2Attention(nn.Module):
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
-        assert attention_mask is None, "only support builtin casual mask for now"
+        if attention_mask is not None:
+            print(
+                f"WARNING: GPT2Attention only supports builtin casual mask for now. "
+                "The given attention mask is ignored."
+            )
         assert encoder_hidden_states is None, "Cross attention is not supported yet"
         assert not self.reorder_and_upcast_attn, "reorder_and_upcast_attn is not supported for now"
-        assert not use_cache, "use_cache is not supported for now"
         assert head_mask is None, "head_mask is not supported for now"
 
         query, key, value = self.c_attn(hidden_states).split(self.split_size, dim=2)
@@ -252,6 +255,11 @@ class GPT2Attention(nn.Module):
             key = torch.cat((past_key, key), dim=-2)
             value = torch.cat((past_value, value), dim=-2)
 
+        if use_cache is True:
+            present = (key, value)
+        else:
+            present = None
+
         seq_len = query.shape[1]
         attention_mask = xformers.ops.LowerTriangularMask(
             [1, seq_len, seq_len], dtype=query.dtype, device="cuda"
@@ -263,7 +271,7 @@ class GPT2Attention(nn.Module):
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
-        outputs = (attn_output, None)
+        outputs = (attn_output, present)
         if output_attentions:
             assert attn_weights is not None, "output attention is not supported for now"
             outputs += (attn_weights,)

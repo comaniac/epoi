@@ -118,12 +118,13 @@ def softmax(args):
         if lib == "torch":
 
             def torch_softmax(input, mask):
-                if softmax_in_fp32:
+                cast_input = input.dtype == torch.float16 and softmax_in_fp32
+                if cast_input:
                     input = input.float()
                 if mask is not None:
                     input = input + mask
                 probs = nn.functional.softmax(input, dim=-1)
-                if softmax_in_fp32:
+                if cast_input:
                     return probs.half()
                 return probs
 
