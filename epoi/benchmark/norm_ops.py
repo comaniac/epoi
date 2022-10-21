@@ -169,6 +169,14 @@ def softmax(args):
             zero_grad=zero_grad,
         ),
         BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, False, "torch"),
+            torch.float16,
+            "PyTorch (Comp-FP16)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+        BenchConfig(
             lambda shape, dtype: _init(shape, dtype, True, "megatron"),
             torch.float16,
             "Megatron-LM (Comp-FP32)",
@@ -187,9 +195,9 @@ def softmax(args):
     ]
 
     # Check correctness
-    fun_pt = configs[2].init_func(shapes[0], configs[0].dtype)
-    fun_megatron = configs[1].init_func(shapes[0], configs[1].dtype)
-    fun_xformers = configs[2].init_func(shapes[0], configs[2].dtype)
+    fun_pt = configs[0].init_func(shapes[0], configs[0].dtype)
+    fun_megatron = configs[2].init_func(shapes[0], configs[1].dtype)
+    fun_xformers = configs[3].init_func(shapes[0], configs[2].dtype)
     check_correctness(
         shapes[0], fun_pt, fun_megatron, configs[0], tol=1e-3, desc="Megatron-LM (Comp-FP32)"
     )

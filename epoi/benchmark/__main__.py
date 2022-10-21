@@ -5,7 +5,10 @@ import traceback
 from inspect import getmembers, getmodule, isfunction, ismodule
 
 from . import fused_ops, layer_ops, norm_ops
+from . import logger
 from .utils import get_version_n_commit
+
+logger = logger.get_logger("main")
 
 LIBS = ["epoi", "torch", "transformers", "xformers", "megatron", "triton", "apex"]
 
@@ -66,22 +69,22 @@ def main():
     selected, total = 0, 0
     for name, func in get_case_list():
         if select(only_run, name):
-            print(f"Selected {name}")
+            logger.info(f"Selected {name}")
             funcs.append((name, func))
             selected += 1
         else:
-            print(f"Skipped {name}")
+            logger.info(f"Skipped {name}")
         total += 1
-    print(f"Running selected {selected}/{total} cases")
+    logger.info(f"Running selected {selected}/{total} cases")
 
     n_func = len(funcs)
     for idx, (name, func) in enumerate(funcs):
-        print(f"[{idx + 1}/{n_func}] Benchmarking {name}", flush=True)
+        logger.info(f"[{idx + 1}/{n_func}] Benchmarking {name}")
         try:
             func(args)
         except Exception as err:
             traceback.print_exc()
-            print(f"Failed to benchmark {name}: {err}")
+            logger.info(f"Failed to benchmark {name}: {err}")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,13 @@
 from dataclasses import dataclass
 from typing import Callable
+import traceback
 
 import torch
 import torch.utils.benchmark as benchmark
+
+from .logger import get_logger
+
+logger = get_logger("bencher")
 
 GLOBAL_MSGS = set()
 
@@ -30,7 +35,7 @@ class MemoryMeasurement:
     def print(results):
         from tabulate import tabulate
 
-        descs = {} # Use dict to dedup while preserving order.
+        descs = {}  # Use dict to dedup while preserving order.
         for result in results:
             if result.desc not in descs:
                 descs[result.desc] = 1
@@ -56,7 +61,7 @@ def gen_output_like(func, inputs):
         except:
             return None
     if isinstance(out, (list, tuple)):
-        ret = [torch.rand_like(o) for o in out]
+        ret = [torch.rand_like(o) if o is not None else None for o in out]
     else:
         ret = torch.rand_like(out)
     return ret
@@ -68,6 +73,9 @@ def _forward_only(func, inputs, grad=None, zero_grad_fn=None):
 
 def _forward_backward(func, inputs, grad, zero_grad_fn=None):
     out = func(*inputs)
+    if isinstance(out, (list, tuple)):
+        out = [o for o in out if o is not None]
+        grad = [g for g in grad if g is not None]
     torch.autograd.backward(out, grad)
     if zero_grad_fn is not None:
         zero_grad_fn(func, inputs)
@@ -83,15 +91,16 @@ def test_func(func, inputs, grad, zero_grad_fn, verbose=False):
         return True
     except Exception as err:
         if verbose:
-            print(err)
+            print(traceback.format_exc())
+            logger.warning(err)
         return False
 
 
 def skip_if(cond, desc):
     if cond:
-        msg = f"Skip {desc} due to forward failure"
+        msg = f"Skip {desc}"
         if msg not in GLOBAL_MSGS:
-            print(msg, flush=True)
+            logger.warning(msg)
             GLOBAL_MSGS.add(msg)
         return True
     return False
@@ -103,13 +112,13 @@ def bench(shapes, configs, label, verbose=False):
     for shape in shapes:
         for config in configs:
             func = config.init_func(shape, config.dtype)
-            if skip_if(func is None, f"{config.desc}"):
+            if skip_if(func is None, f"{config.desc}: Initialization failed with shape {shape}"):
                 continue
             inputs = config.gen_inputs(shape, config.dtype)
 
             if skip_if(
                 not test_func(func, inputs, None, config.zero_grad, verbose=verbose),
-                f"correctness checking of {config.desc}",
+                f"{config.desc}: Forward failed with shape {shape}",
             ):
                 continue
 
@@ -133,7 +142,7 @@ def bench(shapes, configs, label, verbose=False):
                     not test_func(
                         func, inputs, global_dict["grad"], config.zero_grad, verbose=verbose
                     ),
-                    f"correctness checking of {config.desc}",
+                    f"{config.desc}: Backward failed with shape {shape}",
                 ):
                     continue
 
@@ -163,11 +172,14 @@ def bench(shapes, configs, label, verbose=False):
 
 def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=False):
     if func is None or func_ref is None:
-        print(f"Skip correctness for {desc} due to initialization failure")
+        logger.warning(f"Correctness checking for {desc} failed at initialization")
         return
 
     inputs = config.gen_inputs(shape, config.dtype)
-    if skip_if(not test_func(func, inputs, None, config.zero_grad, verbose=verbose), f"{desc}"):
+    if skip_if(
+        not test_func(func, inputs, None, config.zero_grad, verbose=verbose),
+        f"correctness checking for {desc}: Forward failed",
+    ):
         return
 
     if config.backward:
@@ -181,7 +193,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
 
         if skip_if(
             not test_func(func, inputs, grads_input, config.zero_grad, verbose=verbose),
-            f"{desc}",
+            f"correctness checking for {desc}: Backward failed",
         ):
             return
         out = _forward_backward(func, inputs, grads_input)
@@ -195,7 +207,8 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
     try:
         torch.testing.assert_close(out, out_ref, rtol=tol, atol=tol)
     except Exception as err:
-        print(f"Correctness checking for {desc} (forward) is failed: {err}", flush=True)
+        logger.warning(f"Correctness checking for {desc} (forward) is failed: {err}")
+        return
 
     # Check backward.
     if config.backward:
@@ -203,6 +216,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
             try:
                 torch.testing.assert_close(grad, grad_ref, rtol=tol, atol=tol)
             except Exception as err:
-                print(f"Correctness checking for {desc} (backward) is failed: {err}", flush=True)
+                logger.warning(f"Correctness checking for {desc} (backward) is failed: {err}")
+                return
 
-    print(f"Correctness checking for {desc} is passed", flush=True)
+    logger.info(f"Correctness checking for {desc} is passed")

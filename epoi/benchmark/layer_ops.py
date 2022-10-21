@@ -3,6 +3,9 @@ import torch
 
 from .utils import is_available
 from .bencher import BenchConfig, bench, check_correctness
+from .logger import get_logger
+
+logger = get_logger("layer_ops")
 
 
 def qkv_self_attn(args):
@@ -110,7 +113,7 @@ def qkv_self_attn(args):
 
 def bert_attention(args):
     if not is_available("transformers") or not is_available("xformers"):
-        print("Skip attention because transformers or xformers is not available")
+        logger.warning("Skip attention because transformers or xformers is not available")
         return
 
     from transformers import AutoConfig
@@ -236,15 +239,14 @@ def bert_attention(args):
     bench(
         shapes,
         configs,
-        "Attention (Attn) and FlashAttention (FA) without mask",
+        "Bert Attention (Attn) and FlashAttention (FA) without mask",
         verbose=args.verbose,
     )
 
 
 def gpt_attention(args):
-    """FIXME: This is not working yet"""
     if not is_available("transformers") or not is_available("xformers"):
-        print("Skip attention because transformers or xformers is not available")
+        logger.warning("Skip attention because transformers or xformers is not available")
         return
 
     from transformers import AutoConfig
@@ -252,13 +254,14 @@ def gpt_attention(args):
     from ..ops.xformers_attn import GPT2Attention as xFormersSelfAttention
 
     def _init(shape, dtype, attn_type, no_dropout=False):
-        config = AutoConfig.from_pretrained("gpt2")
-        # config.hidden_size = shape[2]
-        # config.num_attention_heads = shape[3]
-        # config.intermediate_size = shape[4]
-        # config.vocab_size = shape[5]
+        config = AutoConfig.from_pretrained("gpt2-medium")
+        config.max_position_embeddings = shape[1]
+        config.n_embed = config.hidden_size = shape[2]  # hidden size
+        config.n_head = config.num_attention_heads = shape[3]
+        config.vocab_size = shape[4]
         if no_dropout:
-            config.attention_probs_dropout_prob = 0.0
+            config.attn_pdrop = 0.0
+            config.resid_pdrop = 0.0
         if attn_type is not None:
             attn = xFormersSelfAttention(config, attn_op_name=attn_type)
         else:
@@ -268,11 +271,11 @@ def gpt_attention(args):
         return attn.cuda()
 
     def gen_inputs(shape, dtype):
-        # (batch, seq, hidden size)
+        # (batch, seq, hidden size * 3)
         inp_shape = shape[:3]
-        hidden_states = torch.randn(*inp_shape, dtype=dtype, device="cuda")
-        attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
-        return [hidden_states, attn_mask]
+        hidden_states = torch.randn([*inp_shape[:2], inp_shape[2]], dtype=dtype, device="cuda")
+        # attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
+        return [hidden_states, None, None]  # (hidden_states, layer_past, attn_mask)
 
     def zero_grad(mod, inputs):
         inputs[0].grad = None
@@ -282,18 +285,16 @@ def gpt_attention(args):
         mod.c_proj.bias.grad = None
 
     def override_params(this, other):
-        this.query.weight = other.query.weight
-        this.query.bias = other.query.bias
-        this.key.weight = other.key.weight
-        this.key.bias = other.key.bias
-        this.value.weight = other.value.weight
-        this.value.bias = other.value.bias
+        this.c_attn.weight = other.c_attn.weight
+        this.c_attn.bias = other.c_attn.bias
+        this.c_proj.weight = other.c_proj.weight
+        this.c_proj.bias = other.c_proj.bias
 
-    # (batch, seq, hidden size, #head, intermediate size, vocab size)
+    # (batch, seq, hidden size, #head, vocab size)
     shapes = [
-        (8, 512, 1024, 16, 4096, 30522),
-        # (16, 512, 8192, 64, 32768, 50264),
-        # (4, 2048, 8192, 64, 32768, 50264),
+        (8, 1024, 1024, 16, 50257),  # gpt2-medium
+        (16, 512, 8192, 64, 50264),
+        (4, 2048, 8192, 64, 50264),
     ]
     configs = [
         BenchConfig(
@@ -305,43 +306,48 @@ def gpt_attention(args):
             zero_grad=zero_grad,
         ),
         BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "native"),
+            lambda shape, dtype: _init(shape, dtype, "vanilla"),
             torch.float16,
             "xFormers (FA)",
             not args.forward_only,
             gen_inputs=gen_inputs,
             zero_grad=zero_grad,
         ),
-        # BenchConfig(
-        #     lambda shape, dtype: _init(shape, dtype, "base"),
-        #     torch.float16,
-        #     "xFormers (FA)",
-        #     not args.forward_only,
-        #     gen_inputs=gen_inputs,
-        #     zero_grad=zero_grad,
-        # ),
-        # BenchConfig(
-        #     lambda shape, dtype: _init(shape, dtype, "cutlass"),
-        #     torch.float16,
-        #     "xFormers Cutlass (FA)",
-        #     not args.forward_only,
-        #     gen_inputs=gen_inputs,
-        #     zero_grad=zero_grad,
-        # ),
-        # BenchConfig(
-        #     lambda shape, dtype: _init(shape, dtype, "triton"),
-        #     torch.float16,
-        #     "xFormers Triton (FA)",
-        #     not args.forward_only,
-        #     gen_inputs=gen_inputs,
-        #     zero_grad=zero_grad,
-        # ),
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, "cutlass"),
+            torch.float16,
+            "xFormers Cutlass (FA)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, "triton"),
+            torch.float16,
+            "xFormers Triton (FA)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
     ]
 
-    # Check correctness
+    # Check correctness. Note that vanilla FashAttention does not support casual mask.
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    fun_xf_base = _init(shapes[0], configs[1].dtype, "native", no_dropout=True)
-    override_params(fun_xf_base, fun_attn)
-    check_correctness(
-        shapes[0], fun_attn, fun_xf_base, configs[0], tol=1e-3, desc="xFormers FlashAttn"
+    for name in ["cutlass", "triton"]:
+        fun_xf = _init(shapes[0], configs[1].dtype, name, no_dropout=True)
+        override_params(fun_xf, fun_attn)
+        check_correctness(
+            shapes[0],
+            fun_attn,
+            fun_xf,
+            configs[0],
+            tol=1e-3,
+            desc=f"xFormers FlashAttn ({name})",
+            verbose=args.verbose,
+        )
+    bench(
+        shapes,
+        configs,
+        "GPT Attention (Attn) and FlashAttention (FA) without mask",
+        verbose=args.verbose,
     )
