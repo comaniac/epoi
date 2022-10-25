@@ -41,7 +41,10 @@ to import/benchmark certain operators.
 python -m epoi.benchmark
 ```
 
-This will benchmark all included operators on your local GPUs.
+This will benchmark all included operators on your local GPUs. The full benchmark
+results can be found [here](notebooks/benchmark-ops.ipynb).
+
+
 In addition, the following flags may also useful:
 
 `--only-run op1,op2`: Only benchmark the ops with `op1` OR `op2` in their names.

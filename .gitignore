@@ -1,3 +1,7 @@
+# EPOI specific
+**/log.txt
+**/transformers
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
