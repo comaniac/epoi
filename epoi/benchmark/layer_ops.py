@@ -118,7 +118,7 @@ def bert_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.bert.modeling_bert import BertSelfAttention
-    from ..ops.xformers_attn import BertSelfAttention as xFormersSelfAttention
+    from ..inject.policy import InjectHFBertSelfAttentionPolicy
 
     def _init(shape, dtype, attn_type, no_dropout=False):
         config = AutoConfig.from_pretrained("bert-large-uncased")
@@ -128,10 +128,10 @@ def bert_attention(args):
         config.vocab_size = shape[5]
         if no_dropout:
             config.attention_probs_dropout_prob = 0.0
+        attn = BertSelfAttention(config)
         if attn_type is not None:
-            attn = xFormersSelfAttention(config, attn_op_name=attn_type)
-        else:
-            attn = BertSelfAttention(config)
+            attn = InjectHFBertSelfAttentionPolicy.init(attn, attn_type=attn_type)
+
         if dtype == torch.float16:
             attn = attn.half()
         return attn.cuda()
@@ -152,14 +152,6 @@ def bert_attention(args):
         mod.query.weight.grad = None
         mod.query.bias.grad = None
 
-    def override_params(this, other):
-        this.query.weight = other.query.weight
-        this.query.bias = other.query.bias
-        this.key.weight = other.key.weight
-        this.key.bias = other.key.bias
-        this.value.weight = other.value.weight
-        this.value.bias = other.value.bias
-
     # (batch, seq, hidden size, #head, intermediate size, vocab size)
     shapes = [
         (8, 512, 1024, 16, 4096, 30522),
@@ -174,68 +166,37 @@ def bert_attention(args):
             not args.forward_only,
             gen_inputs=gen_inputs,
             zero_grad=zero_grad,
-        ),
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "vanilla"),
-            torch.float16,
-            "xFormers (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "cutlass"),
-            torch.float16,
-            "xFormers Cutlass (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "triton"),
-            torch.float16,
-            "xFormers Triton (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
+        )
     ]
 
     # Check correctness
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    fun_xf_base = _init(shapes[0], configs[1].dtype, "vanilla", no_dropout=True)
-    fun_xf_cutlass = _init(shapes[0], configs[1].dtype, "cutlass", no_dropout=True)
-    fun_xf_triton = _init(shapes[0], configs[1].dtype, "triton", no_dropout=True)
-    override_params(fun_xf_base, fun_attn)
-    check_correctness(
-        shapes[0],
-        fun_attn,
-        fun_xf_base,
-        configs[0],
-        tol=1e-3,
-        desc="xFormers Vanilla FlashAttn",
-        verbose=args.verbose,
-    )
-    override_params(fun_xf_cutlass, fun_attn)
-    check_correctness(
-        shapes[0],
-        fun_attn,
-        fun_xf_cutlass,
-        configs[0],
-        tol=1e-3,
-        desc="xFormers Cutlass FlashAttn",
-        verbose=args.verbose,
-    )
-    override_params(fun_xf_triton, fun_attn)
-    check_correctness(
-        shapes[0],
-        fun_attn,
-        fun_xf_triton,
-        configs[0],
-        tol=1e-3,
-        desc="xFormers Triton FlashAttn",
-        verbose=args.verbose,
-    )
+    for fun_xf_name in ["vanilla", "cutlass", "triton"]:
+        fun_xf = _init(shapes[0], configs[0].dtype, fun_xf_name, no_dropout=True)
+        InjectHFBertSelfAttentionPolicy.assign_params(fun_xf, fun_attn)
+        correct = check_correctness(
+            shapes[0],
+            fun_attn,
+            fun_xf,
+            configs[0],
+            tol=1e-3,
+            desc=f"xFormers {fun_xf_name} FlashAttn",
+            verbose=args.verbose,
+        )
+        if correct:
+            def _init_helper(name):
+                return lambda shape, dtype: _init(shape, dtype, name)
+            configs.append(
+                BenchConfig(
+                    _init_helper(fun_xf_name),
+                    torch.float16,
+                    f"xFormers {fun_xf_name} (FA)",
+                    not args.forward_only,
+                    gen_inputs=gen_inputs,
+                    zero_grad=zero_grad,
+                )
+            )
+
     return bench(
         shapes,
         configs,
@@ -251,7 +212,7 @@ def gpt_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
-    from ..ops.xformers_attn import GPT2Attention as xFormersSelfAttention
+    from ..inject.policy import InjectHFGPT2SelfAttentionPolicy
 
     def _init(shape, dtype, attn_type, no_dropout=False):
         config = AutoConfig.from_pretrained("gpt2-medium")
@@ -262,10 +223,9 @@ def gpt_attention(args):
         if no_dropout:
             config.attn_pdrop = 0.0
             config.resid_pdrop = 0.0
+        attn = GPT2Attention(config)
         if attn_type is not None:
-            attn = xFormersSelfAttention(config, attn_op_name=attn_type)
-        else:
-            attn = GPT2Attention(config)
+            attn = InjectHFGPT2SelfAttentionPolicy.init(attn, attn_type=attn_type)
         if dtype == torch.float16:
             attn = attn.half()
         return attn.cuda()
@@ -279,16 +239,10 @@ def gpt_attention(args):
 
     def zero_grad(mod, inputs):
         inputs[0].grad = None
-        mod.c_attn.weight.grad = None
-        mod.c_attn.bias.grad = None
-        mod.c_proj.weight.grad = None
-        mod.c_proj.bias.grad = None
-
-    def override_params(this, other):
-        this.c_attn.weight = other.c_attn.weight
-        this.c_attn.bias = other.c_attn.bias
-        this.c_proj.weight = other.c_proj.weight
-        this.c_proj.bias = other.c_proj.bias
+        for param_name in ["c_attn", "c_proj", "qkv", "out_proj"]:
+            if hasattr(mod, param_name):
+                getattr(mod, param_name).weight.grad = None
+                getattr(mod, param_name).bias.grad = None
 
     # (batch, seq, hidden size, #head, vocab size)
     shapes = [
@@ -305,38 +259,14 @@ def gpt_attention(args):
             gen_inputs=gen_inputs,
             zero_grad=zero_grad,
         ),
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "vanilla"),
-            torch.float16,
-            "xFormers (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "cutlass"),
-            torch.float16,
-            "xFormers Cutlass (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, "triton"),
-            torch.float16,
-            "xFormers Triton (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
     ]
 
     # Check correctness. Note that vanilla FashAttention does not support casual mask.
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
     for name in ["cutlass", "triton"]:
-        fun_xf = _init(shapes[0], configs[1].dtype, name, no_dropout=True)
-        override_params(fun_xf, fun_attn)
-        check_correctness(
+        fun_xf = _init(shapes[0], configs[0].dtype, name, no_dropout=True)
+        InjectHFGPT2SelfAttentionPolicy.assign_params(fun_xf, fun_attn)
+        correct = check_correctness(
             shapes[0],
             fun_attn,
             fun_xf,
@@ -345,6 +275,19 @@ def gpt_attention(args):
             desc=f"xFormers FlashAttn ({name})",
             verbose=args.verbose,
         )
+        if correct:
+            def _init_helper(name):
+                return lambda shape, dtype: _init(shape, dtype, name)
+            configs.append(
+                BenchConfig(
+                    _init_helper(name),
+                    torch.float16,
+                    f"xFormers {name} (FA)",
+                    not args.forward_only,
+                    gen_inputs=gen_inputs,
+                    zero_grad=zero_grad,
+                )
+            )
 
     return bench(
         shapes,
