@@ -4,13 +4,15 @@ import sys
 import traceback
 from inspect import getmembers, getmodule, isfunction, ismodule
 
+from collections import OrderedDict
+
 from . import fused_ops, layer_ops, norm_ops
 from . import logger
 from .utils import get_version_n_commit
 
 logger = logger.get_logger("main")
 
-LIBS = ["epoi", "torch", "transformers", "xformers", "megatron", "triton", "apex"]
+LIBS = ["epoi", "transformers", "xformers", "megatron", "triton", "apex"]
 
 
 def get_case_list():
@@ -48,22 +50,41 @@ def select(only_run, name):
     return any([s in name for s in only_run])
 
 
-def list_versions():
+def list_envs():
     from tabulate import tabulate
+    import torch
 
+    print("===== Environment =====\n")
+    print(f"GPU: {torch.cuda.get_device_name(0)}\n")
+
+    # PyTorch
+    print("PyTorch Configuration")
+    data = OrderedDict()
+    ver, commit = get_version_n_commit("torch")
+    data["Version"] = ver
+    if commit != "N/A":
+        data["Commit"] = commit
+    data["Built w. CUDA"] = torch.version.cuda
+    print(tabulate(data.items(), headers=["Config", "Value"], stralign="center", numalign="center"))
+    print("\n")
+
+    # Other libs
+    print("Other Libraries Configuration")
     data = [[lib] + list(get_version_n_commit(lib)) for lib in LIBS]
+    data = [info for info in data if info[1] != "N/A"]
     print(
         tabulate(
             data, headers=["Package", "Version", "Commit SHA"], stralign="center", numalign="center"
         )
     )
+    print("===== Environment =====\n")
 
 
 def main():
     args = parse_args()
     only_run = None if args.only_run is None else args.only_run.split(",")
 
-    list_versions()
+    list_envs()
 
     funcs = []
     selected, total = 0, 0

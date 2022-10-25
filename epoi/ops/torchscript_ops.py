@@ -61,6 +61,75 @@ class FusedBiasGELU(torch.nn.Module):
         return F.gelu(input + self.bias, approximate="none")
 
 
+def new_gelu(input):
+    """New GELU activation function copied from HuggingFace transformers."""
+    return (
+        0.5
+        * input
+        * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
+    )
+
+
+@torch.jit.script
+def bias_new_gelu(input, bias):
+    return new_gelu(input + bias)
+
+
+class FusedBiasNewGELU(torch.nn.Module):
+    def __init__(self, size, device=None, dtype=None, prev_weight=None, fused=True):
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+        self.bias = torch.nn.Parameter(torch.empty(size, **factory_kwargs))
+        self.fused = fused
+        self.reset_parameters(prev_weight)
+
+    def reset_parameters(self, prev_weight=None):
+        range = (0, 1)
+        if prev_weight is not None:
+            fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(prev_weight)
+            bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+            range = (-bound, bound)
+        torch.nn.init.uniform_(self.bias, *range)
+
+    def forward(self, input):
+        if self.fused:
+            return bias_new_gelu(input, self.bias)
+        return new_gelu(input + self.bias)
+
+
+class MM(torch.nn.Module):
+    """
+    Copied from HuggingFace transformers.
+    The MM layer defined defined by Radford et al. for OpenAI GPT (and also used in GPT-2).
+
+    Basically works like a linear layer but the weights are transposed.
+
+    Args:
+        nf (`int`): The number of output features.
+        nx (`int`): The number of input features.
+    """
+
+    def __init__(self, nf, nx, bias=True):
+        super().__init__()
+        self.nf = nf
+        w = torch.empty(nx, nf)
+        torch.nn.init.normal_(w, std=0.02)
+        self.weight = torch.nn.Parameter(w)
+        if bias:
+            self.bias = torch.nn.Parameter(torch.zeros(nf))
+        else:
+            self.register_parameter("bias", None)
+
+    def forward(self, x):
+        size_out = x.size()[:-1] + (self.nf,)
+        if self.bias is not None:
+            x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
+        else:
+            x = torch.mm(x.view(-1, x.size(-1)), self.weight)
+        x = x.view(size_out)
+        return x
+
+
 def fused_dropout_add_layernorm(
     input1,
     input2,

@@ -86,7 +86,7 @@ def qkv_self_attn(args):
         (16, 512, 8192, 64),  # gigantic model 1 w. BS16, seq512
         (4, 2048, 8192, 64),  # gigantic model 1 w. BS4, seq2048
     ]
-    bench(
+    return bench(
         shapes,
         [
             BenchConfig(
@@ -236,7 +236,7 @@ def bert_attention(args):
         desc="xFormers Triton FlashAttn",
         verbose=args.verbose,
     )
-    bench(
+    return bench(
         shapes,
         configs,
         "Bert Attention (Attn) and FlashAttention (FA) without mask",
@@ -345,7 +345,8 @@ def gpt_attention(args):
             desc=f"xFormers FlashAttn ({name})",
             verbose=args.verbose,
         )
-    bench(
+
+    return bench(
         shapes,
         configs,
         "GPT Attention (Attn) and FlashAttention (FA) without mask",

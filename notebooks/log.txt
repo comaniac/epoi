@@ -1,0 +1,772 @@
+10/24/2022 18:37:49 - WARNING - __main__ - Process rank: 0, device: cuda:0, n_gpu: 1distributed training: True, 16-bits training: True
+10/24/2022 18:37:49 - INFO - __main__ - Training/evaluation parameters TrainingArguments(
+_n_gpu=1,
+adafactor=False,
+adam_beta1=0.9,
+adam_beta2=0.999,
+adam_epsilon=1e-08,
+auto_find_batch_size=False,
+bf16=False,
+bf16_full_eval=False,
+data_seed=None,
+dataloader_drop_last=False,
+dataloader_num_workers=0,
+dataloader_pin_memory=True,
+ddp_bucket_cap_mb=None,
+ddp_find_unused_parameters=None,
+ddp_timeout=1800,
+debug=[],
+deepspeed=None,
+disable_tqdm=False,
+do_eval=False,
+do_predict=False,
+do_train=True,
+eval_accumulation_steps=None,
+eval_delay=0,
+eval_steps=None,
+evaluation_strategy=no,
+fp16=True,
+fp16_backend=auto,
+fp16_full_eval=False,
+fp16_opt_level=O1,
+fsdp=[],
+fsdp_min_num_params=0,
+fsdp_transformer_layer_cls_to_wrap=None,
+full_determinism=False,
+gradient_accumulation_steps=1,
+gradient_checkpointing=False,
+greater_is_better=None,
+group_by_length=False,
+half_precision_backend=auto,
+hub_model_id=None,
+hub_private_repo=False,
+hub_strategy=every_save,
+hub_token=<HUB_TOKEN>,
+ignore_data_skip=False,
+include_inputs_for_metrics=False,
+jit_mode_eval=False,
+label_names=None,
+label_smoothing_factor=0.0,
+learning_rate=2e-05,
+length_column_name=length,
+load_best_model_at_end=False,
+local_rank=0,
+log_level=passive,
+log_level_replica=passive,
+log_on_each_node=True,
+logging_dir=/tmp/gpt/runs/Oct24_18-37-48_ip-172-31-32-132,
+logging_first_step=False,
+logging_nan_inf_filter=True,
+logging_steps=500,
+logging_strategy=steps,
+lr_scheduler_type=linear,
+max_grad_norm=1.0,
+max_steps=20,
+metric_for_best_model=None,
+mp_parameters=,
+no_cuda=False,
+num_train_epochs=3.0,
+optim=adamw_apex_fused,
+output_dir=/tmp/gpt/,
+overwrite_output_dir=True,
+past_index=-1,
+per_device_eval_batch_size=8,
+per_device_train_batch_size=2,
+prediction_loss_only=False,
+push_to_hub=False,
+push_to_hub_model_id=None,
+push_to_hub_organization=None,
+push_to_hub_token=<PUSH_TO_HUB_TOKEN>,
+ray_scope=last,
+remove_unused_columns=True,
+report_to=['tensorboard'],
+resume_from_checkpoint=None,
+run_name=/tmp/gpt/,
+save_on_each_node=False,
+save_steps=500,
+save_strategy=steps,
+save_total_limit=None,
+seed=42,
+sharded_ddp=[],
+skip_memory_metrics=False,
+tf32=None,
+torchdynamo=None,
+tpu_metrics_debug=False,
+tpu_num_cores=None,
+use_ipex=False,
+use_legacy_prediction_loop=False,
+use_mps_device=False,
+warmup_ratio=0.0,
+warmup_steps=0,
+weight_decay=0.0,
+xpu_backend=None,
+)
+10/24/2022 18:37:49 - INFO - datasets.info - Loading Dataset Infos from /home/ubuntu/.cache/huggingface/modules/datasets_modules/datasets/wikitext/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126
+10/24/2022 18:37:49 - INFO - datasets.builder - Overwrite dataset info from restored data version.
+10/24/2022 18:37:49 - INFO - datasets.info - Loading Dataset info from /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126
+10/24/2022 18:37:49 - WARNING - datasets.builder - Reusing dataset wikitext (/home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126)
+10/24/2022 18:37:49 - INFO - datasets.info - Loading Dataset info from /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126
+  0%|          | 0/3 [00:00<?, ?it/s]100%|██████████| 3/3 [00:00<00:00, 808.41it/s]
+[INFO|configuration_utils.py:653] 2022-10-24 18:37:49,917 >> loading configuration file config.json from cache at /home/ubuntu/.cache/huggingface/hub/models--gpt2-medium/snapshots/e852c9080bc759a01663acf5a828d95b261a9903/config.json
+[INFO|configuration_utils.py:705] 2022-10-24 18:37:49,919 >> Model config GPT2Config {
+  "_name_or_path": "gpt2-medium",
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 1024,
+  "n_head": 16,
+  "n_inner": null,
+  "n_layer": 24,
+  "n_positions": 1024,
+  "n_special": 0,
+  "predict_special_tokens": true,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.24.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_auto.py:420] 2022-10-24 18:37:50,192 >> Could not locate the tokenizer configuration file, will try to use the model config instead.
+[INFO|configuration_utils.py:653] 2022-10-24 18:37:50,453 >> loading configuration file config.json from cache at /home/ubuntu/.cache/huggingface/hub/models--gpt2-medium/snapshots/e852c9080bc759a01663acf5a828d95b261a9903/config.json
+[INFO|configuration_utils.py:705] 2022-10-24 18:37:50,453 >> Model config GPT2Config {
+  "_name_or_path": "gpt2-medium",
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 1024,
+  "n_head": 16,
+  "n_inner": null,
+  "n_layer": 24,
+  "n_positions": 1024,
+  "n_special": 0,
+  "predict_special_tokens": true,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.24.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+[INFO|tokenization_utils_base.py:1776] 2022-10-24 18:37:51,008 >> loading file vocab.json from cache at /home/ubuntu/.cache/huggingface/hub/models--gpt2-medium/snapshots/e852c9080bc759a01663acf5a828d95b261a9903/vocab.json
+[INFO|tokenization_utils_base.py:1776] 2022-10-24 18:37:51,009 >> loading file merges.txt from cache at /home/ubuntu/.cache/huggingface/hub/models--gpt2-medium/snapshots/e852c9080bc759a01663acf5a828d95b261a9903/merges.txt
+[INFO|tokenization_utils_base.py:1776] 2022-10-24 18:37:51,009 >> loading file tokenizer.json from cache at /home/ubuntu/.cache/huggingface/hub/models--gpt2-medium/snapshots/e852c9080bc759a01663acf5a828d95b261a9903/tokenizer.json
+[INFO|tokenization_utils_base.py:1776] 2022-10-24 18:37:51,009 >> loading file added_tokens.json from cache at None
+[INFO|tokenization_utils_base.py:1776] 2022-10-24 18:37:51,009 >> loading file special_tokens_map.json from cache at None
+[INFO|tokenization_utils_base.py:1776] 2022-10-24 18:37:51,009 >> loading file tokenizer_config.json from cache at None
+[INFO|configuration_utils.py:653] 2022-10-24 18:37:51,009 >> loading configuration file config.json from cache at /home/ubuntu/.cache/huggingface/hub/models--gpt2-medium/snapshots/e852c9080bc759a01663acf5a828d95b261a9903/config.json
+[INFO|configuration_utils.py:705] 2022-10-24 18:37:51,010 >> Model config GPT2Config {
+  "_name_or_path": "gpt2-medium",
+  "activation_function": "gelu_new",
+  "architectures": [
+    "GPT2LMHeadModel"
+  ],
+  "attn_pdrop": 0.1,
+  "bos_token_id": 50256,
+  "embd_pdrop": 0.1,
+  "eos_token_id": 50256,
+  "initializer_range": 0.02,
+  "layer_norm_epsilon": 1e-05,
+  "model_type": "gpt2",
+  "n_ctx": 1024,
+  "n_embd": 1024,
+  "n_head": 16,
+  "n_inner": null,
+  "n_layer": 24,
+  "n_positions": 1024,
+  "n_special": 0,
+  "predict_special_tokens": true,
+  "reorder_and_upcast_attn": false,
+  "resid_pdrop": 0.1,
+  "scale_attn_by_inverse_layer_idx": false,
+  "scale_attn_weights": true,
+  "summary_activation": null,
+  "summary_first_dropout": 0.1,
+  "summary_proj_to_labels": true,
+  "summary_type": "cls_index",
+  "summary_use_proj": true,
+  "task_specific_params": {
+    "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+    }
+  },
+  "transformers_version": "4.24.0.dev0",
+  "use_cache": true,
+  "vocab_size": 50257
+}
+
+10/24/2022 18:38:01 - INFO - __main__ - Training new model from scratch - Total size=338.39M params
+10/24/2022 18:38:01 - WARNING - datasets.arrow_dataset - Loading cached processed dataset at /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126/cache-80557ae132e74c23.arrow
+10/24/2022 18:38:01 - WARNING - datasets.arrow_dataset - Loading cached processed dataset at /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126/cache-5b1713fad85cef5c.arrow
+10/24/2022 18:38:01 - WARNING - datasets.arrow_dataset - Loading cached processed dataset at /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126/cache-5b1bced52937d9fd.arrow
+10/24/2022 18:38:01 - WARNING - datasets.arrow_dataset - Loading cached processed dataset at /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126/cache-48b44580a2ef2594.arrow
+10/24/2022 18:38:01 - WARNING - datasets.arrow_dataset - Loading cached processed dataset at /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126/cache-58126575f70c7c58.arrow
+10/24/2022 18:38:01 - WARNING - datasets.arrow_dataset - Loading cached processed dataset at /home/ubuntu/.cache/huggingface/datasets/wikitext/wikitext-2-raw-v1/1.0.0/a241db52902eaf2c6aa732210bead40c090019a499ceb13bcbfa3f8ab646a126/cache-565f1ece7b5716a6.arrow
+[INFO|trainer.py:503] 2022-10-24 18:38:03,626 >> max_steps is given, it will override any value given in num_train_epochs
+[INFO|trainer.py:557] 2022-10-24 18:38:03,626 >> Using cuda_amp half precision backend
+[INFO|trainer.py:1607] 2022-10-24 18:38:03,891 >> ***** Running training *****
+[INFO|trainer.py:1608] 2022-10-24 18:38:03,891 >>   Num examples = 2318
+[INFO|trainer.py:1609] 2022-10-24 18:38:03,891 >>   Num Epochs = 1
+[INFO|trainer.py:1610] 2022-10-24 18:38:03,891 >>   Instantaneous batch size per device = 2
+[INFO|trainer.py:1611] 2022-10-24 18:38:03,891 >>   Total train batch size (w. parallel, distributed & accumulation) = 2
+[INFO|trainer.py:1612] 2022-10-24 18:38:03,891 >>   Gradient Accumulation steps = 1
+[INFO|trainer.py:1613] 2022-10-24 18:38:03,891 >>   Total optimization steps = 20
+  0%|          | 0/20 [00:00<?, ?it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+[W reducer.cpp:1251] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+  5%|▌         | 1/20 [00:02<00:44,  2.33s/it]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 10%|█         | 2/20 [00:02<00:20,  1.12s/it]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 15%|█▌        | 3/20 [00:02<00:12,  1.40it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 20%|██        | 4/20 [00:03<00:08,  1.91it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 25%|██▌       | 5/20 [00:03<00:06,  2.39it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 30%|███       | 6/20 [00:03<00:04,  2.81it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 35%|███▌      | 7/20 [00:03<00:04,  3.17it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 40%|████      | 8/20 [00:03<00:03,  3.47it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 45%|████▌     | 9/20 [00:04<00:02,  3.69it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 50%|█████     | 10/20 [00:04<00:02,  3.86it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 55%|█████▌    | 11/20 [00:04<00:02,  3.98it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 60%|██████    | 12/20 [00:04<00:01,  4.06it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 65%|██████▌   | 13/20 [00:05<00:01,  4.13it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 70%|███████   | 14/20 [00:05<00:01,  4.17it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 75%|███████▌  | 15/20 [00:05<00:01,  4.20it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 80%|████████  | 16/20 [00:05<00:00,  4.22it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 85%|████████▌ | 17/20 [00:06<00:00,  4.24it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 90%|█████████ | 18/20 [00:06<00:00,  4.26it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+ 95%|█████████▌| 19/20 [00:06<00:00,  4.26it/s]WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+WARNING: GPT2Attention only supports builtin casual mask for now. The given attention mask is ignored.
+100%|██████████| 20/20 [00:06<00:00,  4.27it/s][INFO|trainer.py:1855] 2022-10-24 18:38:10,700 >> 
+
+Training completed. Do not forget to share your model on huggingface.co/models =)
+
+
+[WARNING|integrations.py:625] 2022-10-24 18:38:10,840 >> Trainer is attempting to log a value of "[2.3218541145324707, 0.265822172164917, 0.23039484024047852, 0.22911453247070312, 0.2287735939025879, 0.23015260696411133, 0.22797584533691406, 0.2267136573791504, 0.2284693717956543, 0.22855877876281738, 0.23093056678771973, 0.23001766204833984, 0.2297520637512207, 0.2300395965576172, 0.230665922164917, 0.22985386848449707, 0.2292943000793457, 0.228654146194458, 0.23054099082946777, 0.22914385795593262]" of type <class 'list'> for key "train/step_time_list" as a scalar. This invocation of Tensorboard's writer.add_scalar() is incorrect so we dropped this attribute.
+                                               {'train_runtime': 6.8089, 'train_samples_per_second': 5.875, 'train_steps_per_second': 2.937, 'step_time_list': [2.3218541145324707, 0.265822172164917, 0.23039484024047852, 0.22911453247070312, 0.2287735939025879, 0.23015260696411133, 0.22797584533691406, 0.2267136573791504, 0.2284693717956543, 0.22855877876281738, 0.23093056678771973, 0.23001766204833984, 0.2297520637512207, 0.2300395965576172, 0.230665922164917, 0.22985386848449707, 0.2292943000793457, 0.228654146194458, 0.23054099082946777, 0.22914385795593262], 'train_loss': 9.413331604003906, 'init_mem_cpu_alloc_delta': 19365888, 'init_mem_gpu_alloc_delta': 1419292672, 'init_mem_cpu_peaked_delta': 1313234944, 'init_mem_gpu_peaked_delta': 0, 'train_mem_cpu_alloc_delta': 581824512, 'train_mem_gpu_alloc_delta': 5677174784, 'train_mem_cpu_peaked_delta': 0, 'train_mem_gpu_peaked_delta': 6493878784, 'before_init_mem_cpu': 1876320256, 'before_init_mem_gpu': 0, 'epoch': 0.02}
+100%|██████████| 20/20 [00:06<00:00,  4.27it/s]100%|██████████| 20/20 [00:06<00:00,  2.88it/s]
+[INFO|trainer.py:2675] 2022-10-24 18:38:10,843 >> Saving model checkpoint to /tmp/gpt/
+[INFO|configuration_utils.py:447] 2022-10-24 18:38:10,844 >> Configuration saved in /tmp/gpt/config.json
+[INFO|modeling_utils.py:1624] 2022-10-24 18:38:23,004 >> Model weights saved in /tmp/gpt/pytorch_model.bin
+[INFO|tokenization_utils_base.py:2126] 2022-10-24 18:38:23,004 >> tokenizer config file saved in /tmp/gpt/tokenizer_config.json
+[INFO|tokenization_utils_base.py:2133] 2022-10-24 18:38:23,005 >> Special tokens file saved in /tmp/gpt/special_tokens_map.json
+***** train metrics *****
+  before_init_mem_cpu        =                                                                                                                                 1789MB
+  before_init_mem_gpu        =                                                                                                                                    0MB
+  epoch                      =                                                                                                                                   0.02
+  init_mem_cpu_alloc_delta   =                                                                                                                                   18MB
+  init_mem_cpu_peaked_delta  =                                                                                                                                 1252MB
+  init_mem_gpu_alloc_delta   =                                                                                                                                 1353MB
+  init_mem_gpu_peaked_delta  =                                                                                                                                    0MB
+  step_time_list             = 2.3219,0.2658,0.2304,0.2291,0.2288,0.2302,0.228,0.2267,0.2285,0.2286,0.2309,0.23,0.2298,0.23,0.2307,0.2299,0.2293,0.2287,0.2305,0.2291
+  train_loss                 =                                                                                                                                 9.4133
+  train_mem_cpu_alloc_delta  =                                                                                                                                  554MB
+  train_mem_cpu_peaked_delta =                                                                                                                                    0MB
+  train_mem_gpu_alloc_delta  =                                                                                                                                 5414MB
+  train_mem_gpu_peaked_delta =                                                                                                                                 6193MB
+  train_runtime              =                                                                                                                             0:00:06.80
+  train_samples              =                                                                                                                                   2318
+  train_samples_per_second   =                                                                                                                                  5.875
+  train_steps_per_second     =                                                                                                                                  2.937
+[INFO|modelcard.py:444] 2022-10-24 18:38:23,401 >> Dropping the following result as it does not have all the necessary fields:
+{'task': {'name': 'Causal Language Modeling', 'type': 'text-generation'}, 'dataset': {'name': 'wikitext wikitext-2-raw-v1', 'type': 'wikitext', 'args': 'wikitext-2-raw-v1'}}

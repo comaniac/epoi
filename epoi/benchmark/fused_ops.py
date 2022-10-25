@@ -97,13 +97,13 @@ def bias_gelu(args):
 
     # (batch, seq, intermediate or hidden size)
     shapes = [
-        (8, 512, 1024),
-        (8, 512, 768),
-        (16, 512, 1024),
-        (16, 512, 8192),
-        (16, 512, 32768),
-        (4, 2048, 8192),
-        (4, 2048, 32768),
+        (8, 512, 1024), # bert-large
+        (8, 512, 768),  # bert-base
+        (2, 1024, 4096), # gpt2-medium
+        (16, 512, 8192), # gigantic bert
+        (16, 512, 32768), # gigantic bert
+        (4, 2048, 8192), # gigantic bert
+        (4, 2048, 32768), # gigantic bert
     ]
     bench(
         shapes,

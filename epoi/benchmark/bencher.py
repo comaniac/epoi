@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Callable
+import gc
 import traceback
 
 import torch
@@ -48,10 +49,10 @@ class MemoryMeasurement:
 
         data = []
         for shape, row in dict_data.items():
-            data.append([shape] + [row[desc] for desc in headers[1:]])
+            data.append([shape] + [row[desc] if desc in row else "N/A" for desc in headers[1:]])
 
         print(tabulate(data, headers=headers, stralign="center", numalign="center"))
-        print("\nMemory is in MBs.\n")
+        print("\nMemory is in MBs and excludes inputs/outputs.\n")
 
 
 def gen_output_like(func, inputs):
@@ -68,7 +69,9 @@ def gen_output_like(func, inputs):
 
 
 def _forward_only(func, inputs, grad=None, zero_grad_fn=None):
-    return func(*inputs)
+    ret = func(*inputs)
+    torch.cuda.synchronize()
+    return ret
 
 
 def _forward_backward(func, inputs, grad, zero_grad_fn=None):
@@ -79,6 +82,7 @@ def _forward_backward(func, inputs, grad, zero_grad_fn=None):
     torch.autograd.backward(out, grad)
     if zero_grad_fn is not None:
         zero_grad_fn(func, inputs)
+    torch.cuda.synchronize()
     return out
 
 
@@ -111,6 +115,9 @@ def bench(shapes, configs, label, verbose=False):
     memory_results = []
     for shape in shapes:
         for config in configs:
+            torch.cuda.synchronize()
+            gc.collect()
+            torch.cuda.empty_cache()
             func = config.init_func(shape, config.dtype)
             if skip_if(func is None, f"{config.desc}: Initialization failed with shape {shape}"):
                 continue
@@ -156,18 +163,19 @@ def bench(shapes, configs, label, verbose=False):
             # Benchmark. Note that this implies 500/100=5 warmups.
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
+            memory_before = torch.cuda.max_memory_allocated() / 2**20
             perf_results.append(bencher.timeit(500))
-            memory = torch.cuda.max_memory_allocated() / 2**20
-            memory_results.append(MemoryMeasurement(config.desc, str(shape), memory))
-
-            del bencher
-            del global_dict
-            del inputs
-            torch.cuda.empty_cache()
+            memory_after = torch.cuda.max_memory_allocated() / 2**20
+            memory_results.append(
+                MemoryMeasurement(config.desc, str(shape), memory_after - memory_before)
+            )
 
     compare = benchmark.Compare(perf_results)
     compare.print()
     MemoryMeasurement.print(memory_results)
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
+    return compare, memory_results
 
 
 def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=False):
