@@ -142,8 +142,8 @@ class GenericSelfAttention(nn.Module):
 
         if layer_past is not None:
             past_key, past_value = layer_past
-            key = torch.cat((past_key, key_layer), dim=-2)
-            value = torch.cat((past_value, value_layer), dim=-2)
+            key_layer = torch.cat((past_key, key_layer), dim=-2)
+            value_layer = torch.cat((past_value, value_layer), dim=-2)
 
         if self.is_decoder:
             # Now we always apply casual mask for decoders, but we should also take
@@ -169,6 +169,8 @@ class GenericSelfAttention(nn.Module):
             context_layer = self.out_proj(context_layer)
             context_layer = self.resid_dropout(context_layer)
 
-        present = (key, value) if use_cache else None
-        outputs = (context_layer, present)
+        if use_cache:
+            outputs = (context_layer, (key_layer, value_layer))
+        else:
+            outputs = (context_layer, None)
         return outputs

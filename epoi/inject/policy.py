@@ -14,6 +14,11 @@ class ModuleInjectPolicy:
         return ret
 
     @staticmethod
+    def match(other):
+        """Check if the other module matches the module that could be replaced."""
+        return False
+
+    @staticmethod
     def init_impl(orig, **kwargs):
         """Initialize an instance to inject."""
         raise NotImplementedError()
@@ -42,6 +47,13 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
         return ret
 
     @staticmethod
+    def match(other):
+        """Check if the other module matches the module that could be replaced."""
+        from transformers.models.bert.modeling_bert import BertSelfAttention
+
+        return isinstance(other, BertSelfAttention)
+
+    @staticmethod
     def assign_params(this, orig):
         this.query.weight = orig.query.weight
         this.query.bias = orig.query.bias
@@ -64,7 +76,7 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
             check_unsupported_arg("head_mask", 2, args, kwargs)
             check_unsupported_arg("encoder_hidden_states", 3, args, kwargs)
             check_unsupported_arg("encoder_attention_mask", 4, args, kwargs)
-            check_unsupported_arg("output_attentions", 6, args, kwargs)
+            check_unsupported_arg("output_attentions", 6, args, kwargs, False)
             new_args = {
                 "hidden_states": get_arg("hidden_states", 0, args, kwargs),
                 "attention_mask": get_arg("attention_mask", 1, args, kwargs),
@@ -93,14 +105,21 @@ class InjectHFGPT2SelfAttentionPolicy(ModuleInjectPolicy):
         return ret
 
     @staticmethod
+    def match(other):
+        """Check if the other module matches the module that could be replaced."""
+        from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
+
+        return isinstance(other, GPT2Attention)
+
+    @staticmethod
     def assign_params(this, orig):
         requires_grad = orig.c_attn.weight.requires_grad
         this.qkv.weight = torch.nn.Parameter(
-            orig.c_attn.weight.transpose(-1, 0), requires_grad=requires_grad
+            orig.c_attn.weight.transpose(-1, 0).contiguous(), requires_grad=requires_grad
         )
         this.qkv.bias = orig.c_attn.bias
         this.out_proj.weight = torch.nn.Parameter(
-            orig.c_proj.weight.transpose(-1, 0), requires_grad=requires_grad
+            orig.c_proj.weight.transpose(-1, 0).contiguous(), requires_grad=requires_grad
         )
         this.out_proj.bias = orig.c_proj.bias
 
@@ -118,7 +137,7 @@ class InjectHFGPT2SelfAttentionPolicy(ModuleInjectPolicy):
             check_unsupported_arg("head_mask", 3, args, kwargs)
             check_unsupported_arg("encoder_hidden_states", 4, args, kwargs)
             check_unsupported_arg("encoder_attention_mask", 5, args, kwargs)
-            check_unsupported_arg("output_attentions", 7, args, kwargs)
+            check_unsupported_arg("output_attentions", 7, args, kwargs, False)
             new_args = {
                 "hidden_states": get_arg("hidden_states", 0, args, kwargs),
                 "layer_past": get_arg("layer_past", 1, args, kwargs),
