@@ -1,13 +1,14 @@
 """Injection utilities."""
 from inspect import getmembers, ismodule
-from . import policy
+from .policy import encoder, decoder
 
 
 def get_policy_list():
     policies = []
-    for name, mod in getmembers(policy):
-        if not ismodule(mod) and name.startswith("Inject") and name.endswith("Policy"):
-            policies.append(mod)
+    for parent_mod in [encoder, decoder]:
+        for name, mod in getmembers(parent_mod):
+            if not ismodule(mod) and name.startswith("Inject") and name.endswith("Policy"):
+                policies.append(mod)
     return policies
 
 

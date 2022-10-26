@@ -118,7 +118,7 @@ def bert_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.bert.modeling_bert import BertSelfAttention
-    from ..inject.policy import InjectHFBertSelfAttentionPolicy
+    from ..inject.policy.encoder import InjectHFBertSelfAttentionPolicy
 
     def _init(shape, dtype, attn_type, no_dropout=False):
         config = AutoConfig.from_pretrained("bert-large-uncased")
@@ -212,7 +212,7 @@ def gpt_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
-    from ..inject.policy import InjectHFGPT2SelfAttentionPolicy
+    from ..inject.policy.encoder import InjectHFGPT2SelfAttentionPolicy
 
     def _init(shape, dtype, attn_type, no_dropout=False):
         config = AutoConfig.from_pretrained("gpt2-medium")
