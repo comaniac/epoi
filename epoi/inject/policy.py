@@ -2,6 +2,7 @@
 import torch
 
 from .utils import get_arg, check_unsupported_arg
+from ..ops.torchscript_ops import FusedBiasGELU, FusedBiasNewGELU
 from ..ops.xformers_attn import GenericSelfAttention
 
 
@@ -147,3 +148,103 @@ class InjectHFGPT2SelfAttentionPolicy(ModuleInjectPolicy):
             return orig_forward(**new_args)
 
         this.forward = forward
+
+
+class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
+    class FusedMLP(torch.nn.Module):
+        """A wrapper MLP to make use of fused bias+gelu."""
+        def __init__(self, hidden_size, intermediate_size, orig_act, resid_pdrop):
+            super().__init__()
+            if orig_act == "gelu":
+                self.fc_in = torch.nn.Linear(hidden_size, intermediate_size, bias=False)
+                self.act = FusedBiasGELU(intermediate_size, prev_weight=self.fc_in.weight)
+            elif orig_act == "gelu_new":
+                self.fc_in = torch.nn.Linear(hidden_size, intermediate_size, bias=False)
+                self.act = FusedBiasNewGELU(intermediate_size, prev_weight=self.fc_in.weight)
+            else:
+                raise NotImplementedError(f"Unsupported activation: {orig_act}")
+
+            self.fc_out = torch.nn.Linear(intermediate_size, hidden_size)
+            self.dropout = torch.nn.Dropout(resid_pdrop)
+
+        def forward(self, hidden_states):
+            hidden_states = self.fc_in(hidden_states)
+            hidden_states = self.act(hidden_states)
+            hidden_states = self.fc_out(hidden_states)
+            hidden_states = self.dropout(hidden_states)
+            return hidden_states
+
+    @staticmethod
+    def init_impl(orig):
+        from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
+        from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoMLP
+        from transformers.models.gptj.modeling_gptj import GPTJMLP
+        from transformers.activations import ACT2FN
+
+        # Find the name of the activation function.
+        act_fn_name = None
+        for key, val in ACT2FN.items():
+            if isinstance(val, tuple):
+                val = val[0]
+            if isinstance(orig.act, val):
+                act_fn_name = key
+                break
+        else:
+            raise NotImplementedError(f"Unsupported activation: {orig.act}")
+
+        args = {
+            "orig_act": act_fn_name,
+            "resid_pdrop": orig.dropout.p,
+        }
+
+        # Fetch the intermediate size from weight shape.
+        if isinstance(orig, GPT2MLP):
+            # GPT2 uses legacy Conv1D with transposed weights.
+            args["intermediate_size"], args["hidden_size"] = orig.c_fc.weight.shape
+        elif isinstance(orig, GPTNeoMLP):
+            args["hidden_size"], args["intermediate_size"] = orig.c_fc.weight.shape
+        elif isinstance(orig, GPTJMLP):
+            args["hidden_size"], args["intermediate_size"] = orig.fc_in.weight.shape
+
+        ret = InjectHFGPTMLPPolicy.FusedMLP(**args)
+        return ret
+
+    @staticmethod
+    def match(other):
+        """Check if the other module matches the module that could be replaced."""
+        from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
+        from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoMLP
+        from transformers.models.gptj.modeling_gptj import GPTJMLP
+
+        return other.__class__ in [GPT2MLP, GPTNeoMLP, GPTJMLP]
+
+    @staticmethod
+    def assign_params(this, orig):
+        from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
+        from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoMLP
+        from transformers.models.gptj.modeling_gptj import GPTJMLP
+
+        if isinstance(orig, GPT2MLP):
+            # GPT2 uses legacy Conv1D with transposed weights.
+            fc_names = ["c_fc", "c_proj"]
+        elif isinstance(orig, GPTNeoMLP):
+            fc_names = ["c_fc", "c_proj"]
+        elif isinstance(orig, GPTJMLP):
+            fc_names = ["fc_in", "fc_out"]
+
+        requires_grad = getattr(orig, fc_names[0]).weight.requires_grad
+        if isinstance(orig, GPT2MLP):
+            # GPT2 uses legacy Conv1D with transposed weights.
+            this.fc_in.weight = torch.nn.Parameter(
+                orig.c_fc.weight.transpose(-1, 0).contiguous(), requires_grad=requires_grad
+            )
+            this.act.bias = orig.c_fc.bias
+            this.fc_out.weight = torch.nn.Parameter(
+                orig.c_proj.weight.transpose(-1, 0).contiguous(), requires_grad=requires_grad
+            )
+            this.fc_out.bias = orig.c_proj.bias
+        else:
+            this.fc_in.weight = getattr(orig, fc_names[0]).weight
+            this.act.bias = getattr(orig, fc_names[0]).bias
+            this.fc_out.weight = getattr(orig, fc_names[1]).weight
+            this.fc_out.bias = getattr(orig, fc_names[1]).bias
