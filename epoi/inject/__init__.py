@@ -1,2 +1,2 @@
 """Module Injection."""
-from .inject import inject_module
+from .inject import inject_module, InjectModuleContext

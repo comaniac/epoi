@@ -85,7 +85,7 @@ class FusedBiasNewGELU(torch.nn.Module):
 
     def reset_parameters(self, prev_weight=None):
         range = (0, 1)
-        if prev_weight is not None:
+        if prev_weight is not None and len(prev_weight.shape) > 1:
             fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(prev_weight)
             bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
             range = (-bound, bound)

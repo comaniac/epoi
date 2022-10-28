@@ -1,4 +1,5 @@
 """Encoder specific injection policies."""
+from hashlib import new
 from .base import ModuleInjectPolicy
 from ..utils import get_arg, check_unsupported_arg
 from ...ops.xformers_attn import GenericSelfAttention
@@ -6,23 +7,16 @@ from ...ops.xformers_attn import GenericSelfAttention
 
 class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
     @staticmethod
-    def init_impl(orig, attn_type="cutlass"):
+    def gen_init_config_from_object(orig):
         args = {
             "hidden_size": orig.all_head_size,
             "num_attention_heads": orig.num_attention_heads,
             "is_decoder": False,
             "attn_pdrop": orig.dropout.p,
             "resid_pdrop": 0,
+            "attn_op_name": "cutlass",
         }
-        ret = GenericSelfAttention(**args, attn_op_name=attn_type)
-        return ret
-
-    @staticmethod
-    def match(other):
-        """Check if the other module matches the module that could be replaced."""
-        from transformers.models.bert.modeling_bert import BertSelfAttention
-
-        return isinstance(other, BertSelfAttention)
+        return args
 
     @staticmethod
     def assign_params(this, orig):
@@ -34,16 +28,41 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
         this.value.bias = orig.value.bias
 
     @staticmethod
-    def wrap_forward(this):
-        """Original forward signature:
+    def target_modules():
+        """A list of target modules to be injected."""
+        import transformers.models.bert.modeling_bert
+
+        return [(transformers.models.bert.modeling_bert, "BertSelfAttention")]
+
+    @staticmethod
+    def inject_module():
+        """The custom module to inject."""
+        return GenericSelfAttention
+
+    @staticmethod
+    def gen_init_config_from_config(*args, **kwargs):
+        config = args[0]
+        new_args = {
+            "hidden_size": config.hidden_size,
+            "num_attention_heads": config.num_attention_heads,
+            "is_decoder": False,
+            "attn_pdrop": config.attention_probs_dropout_prob,
+            "resid_pdrop": 0,
+            "attn_op_name": "cutlass",
+        }
+        return new_args
+
+    @staticmethod
+    def gen_wrap_forward(orig_cls, forward):
+        """
+        Original forward signature:
          (hidden_states, attention_mask, head_mask, encoder_hidden_states,
           encoder_attention_mask, past_key_value, output_attentions)
         New forward signature:
          (hidden_states, attention_mask, layer_past, use_cache)
         """
-        orig_forward = this.forward
 
-        def forward(*args, **kwargs):
+        def wrapped_forward(*args, **kwargs):
             check_unsupported_arg("head_mask", 2, args, kwargs)
             check_unsupported_arg("encoder_hidden_states", 3, args, kwargs)
             check_unsupported_arg("encoder_attention_mask", 4, args, kwargs)
@@ -54,9 +73,9 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
                 "layer_past": get_arg("past_key_value", 5, args, kwargs),
                 "use_cache": False,
             }
-            out = orig_forward(**new_args)
+            out = forward(**new_args)
             if out[1] is None:
                 return (out[0],)
             return out
 
-        this.forward = forward
+        return wrapped_forward
