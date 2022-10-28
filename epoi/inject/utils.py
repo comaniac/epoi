@@ -12,5 +12,5 @@ def get_arg(name, position, args, kwargs, default=None):
 
 def check_unsupported_arg(name, position, args, kwargs, expected_value=None):
     """Check if the argument is supported."""
-    val = get_arg(name, position, args, kwargs)
+    val = get_arg(name, position, args, kwargs, expected_value)
     assert val == expected_value, f"Unsupported {name}={val}"

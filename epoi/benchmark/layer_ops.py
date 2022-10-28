@@ -120,7 +120,7 @@ def bert_attention(args):
     from transformers.models.bert.modeling_bert import BertSelfAttention
     from ..inject.policy.encoder import InjectHFBertSelfAttentionPolicy
 
-    def _init(shape, dtype, attn_type, no_dropout=False):
+    def _init(shape, dtype, attn_op_name, no_dropout=False):
         config = AutoConfig.from_pretrained("bert-large-uncased")
         config.hidden_size = shape[2]
         config.num_attention_heads = shape[3]
@@ -129,8 +129,8 @@ def bert_attention(args):
         if no_dropout:
             config.attention_probs_dropout_prob = 0.0
         attn = BertSelfAttention(config)
-        if attn_type is not None:
-            attn = InjectHFBertSelfAttentionPolicy.init(attn, attn_type=attn_type)
+        if attn_op_name is not None:
+            attn = InjectHFBertSelfAttentionPolicy.init_from_object(attn, attn_op_name=attn_op_name)
 
         if dtype == torch.float16:
             attn = attn.half()
@@ -184,8 +184,10 @@ def bert_attention(args):
             verbose=args.verbose,
         )
         if correct:
+
             def _init_helper(name):
                 return lambda shape, dtype: _init(shape, dtype, name)
+
             configs.append(
                 BenchConfig(
                     _init_helper(fun_xf_name),
@@ -212,9 +214,9 @@ def gpt_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
-    from ..inject.policy.encoder import InjectHFGPT2SelfAttentionPolicy
+    from ..inject.policy.decoder import InjectHFGPTAttentionPolicy
 
-    def _init(shape, dtype, attn_type, no_dropout=False):
+    def _init(shape, dtype, attn_op_name, no_dropout=False):
         config = AutoConfig.from_pretrained("gpt2-medium")
         config.max_position_embeddings = shape[1]
         config.n_embed = config.hidden_size = shape[2]  # hidden size
@@ -224,8 +226,8 @@ def gpt_attention(args):
             config.attn_pdrop = 0.0
             config.resid_pdrop = 0.0
         attn = GPT2Attention(config)
-        if attn_type is not None:
-            attn = InjectHFGPT2SelfAttentionPolicy.init(attn, attn_type=attn_type)
+        if attn_op_name is not None:
+            attn = InjectHFGPTAttentionPolicy.init_from_object(attn, attn_op_name=attn_op_name)
         if dtype == torch.float16:
             attn = attn.half()
         return attn.cuda()
@@ -265,7 +267,7 @@ def gpt_attention(args):
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
     for name in ["cutlass", "triton"]:
         fun_xf = _init(shapes[0], configs[0].dtype, name, no_dropout=True)
-        InjectHFGPT2SelfAttentionPolicy.assign_params(fun_xf, fun_attn)
+        InjectHFGPTAttentionPolicy.assign_params(fun_xf, fun_attn)
         correct = check_correctness(
             shapes[0],
             fun_attn,
@@ -276,8 +278,10 @@ def gpt_attention(args):
             verbose=args.verbose,
         )
         if correct:
+
             def _init_helper(name):
                 return lambda shape, dtype: _init(shape, dtype, name)
+
             configs.append(
                 BenchConfig(
                     _init_helper(name),

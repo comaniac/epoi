@@ -1,20 +1,5 @@
 """Injection utilities."""
-from inspect import getmembers, ismodule
-from .policy import encoder, decoder
-
-
-
-def get_policy_list():
-    """Scan all policies under the policy namespace."""
-    policies = []
-    for parent_mod in [encoder, decoder]:
-        for name, mod in getmembers(parent_mod):
-            if not ismodule(mod) and name.startswith("Inject") and name.endswith("Policy"):
-                policies.append(mod)
-    return policies
-
-
-POLICIES = get_policy_list()
+from .policy import POLICIES
 
 
 def find_match_policy(module, policies):

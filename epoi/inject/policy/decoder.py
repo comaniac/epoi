@@ -38,7 +38,7 @@ def find_dropout_prob(config_or_mod):
 
 class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
     @staticmethod
-    def gen_init_config_from_object(orig):
+    def gen_init_config_from_object(orig, **kwargs):
         from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 
         attn_pdrop, resid_pdrop = find_dropout_prob(orig)
@@ -48,7 +48,7 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
             "is_decoder": True,
             "attn_pdrop": attn_pdrop,
             "resid_pdrop": resid_pdrop,
-            "attn_op_name": "cutlass",
+            "attn_op_name": kwargs.get("attn_op_name", "cutlass"),
             "fused_qkv": isinstance(orig, GPT2Attention),
         }
         return args
@@ -63,7 +63,7 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
             "is_decoder": True,
             "attn_pdrop": attn_pdrop,
             "resid_pdrop": resid_pdrop,
-            "attn_op_name": "cutlass",
+            "attn_op_name": kwargs.get("attn_op_name", "cutlass"),
             "fused_qkv": "GPT2" in config.architectures[0],
         }
         return new_args

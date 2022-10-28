@@ -7,16 +7,29 @@ from ...ops.xformers_attn import GenericSelfAttention
 
 class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
     @staticmethod
-    def gen_init_config_from_object(orig):
+    def gen_init_config_from_object(orig, **kwargs):
         args = {
             "hidden_size": orig.all_head_size,
             "num_attention_heads": orig.num_attention_heads,
             "is_decoder": False,
             "attn_pdrop": orig.dropout.p,
             "resid_pdrop": 0,
-            "attn_op_name": "cutlass",
+            "attn_op_name": kwargs.get("attn_op_name", "cutlass"),
         }
         return args
+
+    @staticmethod
+    def gen_init_config_from_config(*args, **kwargs):
+        config = args[0]
+        new_args = {
+            "hidden_size": config.hidden_size,
+            "num_attention_heads": config.num_attention_heads,
+            "is_decoder": False,
+            "attn_pdrop": config.attention_probs_dropout_prob,
+            "resid_pdrop": 0,
+            "attn_op_name": kwargs.get("attn_op_name", "cutlass"),
+        }
+        return new_args
 
     @staticmethod
     def assign_params(this, orig):
@@ -38,19 +51,6 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
     def inject_module():
         """The custom module to inject."""
         return GenericSelfAttention
-
-    @staticmethod
-    def gen_init_config_from_config(*args, **kwargs):
-        config = args[0]
-        new_args = {
-            "hidden_size": config.hidden_size,
-            "num_attention_heads": config.num_attention_heads,
-            "is_decoder": False,
-            "attn_pdrop": config.attention_probs_dropout_prob,
-            "resid_pdrop": 0,
-            "attn_op_name": "cutlass",
-        }
-        return new_args
 
     @staticmethod
     def gen_wrap_forward(orig_cls, forward):
