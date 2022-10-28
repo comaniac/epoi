@@ -60,112 +60,103 @@ In this case, you can use this flag to see a complete error message for debuggin
 Example (on NVIDIA V100):
 
 ```
-python -m epoi.benchmark --only-run bert_attention,softmax,layer_norm
+python -m epoi.benchmark --only-run gpt_attention
 ```
 
 ```
-Skipped dropout_add_ln
-Skipped megatron_bias_gelu
-Selected bert_attention
-Skipped gpt_attention
-Skipped qkv_self_attn
-Selected layer_norm
-Selected softmax
-Running selected 3/7 cases
-[1/3] Benchmarking bert_attention
-Skip xFormers FlashAttn due to forward failure
-Correctness checking for xFormers Cutlass FlashAttn is passed
-Skip xFormers Triton FlashAttn due to forward failure
-Skip correctness checking of xFormers (FA) due to forward failure
-Skip correctness checking of xFormers Triton (FA) due to forward failure
-[------------------ Attention (Attn) and FlashAttention (FA) -----------------]
-                                         |  HF (Attn)  |  xFormers Cutlass (FA)
-1 threads: --------------------------------------------------------------------
-      (8, 512, 1024, 16, 4096, 30522)    |      4.1    |            2.7
-      (16, 512, 8192, 64, 32768, 50264)  |    134.8    |          129.5
-      (4, 2048, 8192, 64, 32768, 50264)  |    198.2    |          195.4
+===== Environment =====
+
+GPU: Tesla V100-SXM2-16GB
+
+PyTorch Configuration
+   Config         Value
+-------------  ------------
+   Version     1.12.1+cu116
+Built w. CUDA      11.6
+
+
+Other Libraries Configuration
+  Package       Version                   Commit SHA
+------------  -----------  ----------------------------------------
+    epoi        0.1.dev    094608d0759392516d5c6b4e00e00e72b3156c1c
+transformers  4.24.0.dev0  12ce2941c7b67c0dedac0f0468b3ed854fa940ab
+  xformers    0.0.14.dev   ba93c5012d00bd1b010514a7bc9bd938c1ad6149
+   triton        2.0.0                       N/A
+    apex          0.1                        N/A
+===== Environment =====
+
+[2022-10-28 00:35:18] INFO main: Skipped bias_gelu
+[2022-10-28 00:35:18] INFO main: Skipped dropout_add_ln
+[2022-10-28 00:35:18] INFO main: Skipped bert_attention
+[2022-10-28 00:35:18] INFO main: Selected gpt_attention
+[2022-10-28 00:35:18] INFO main: Skipped qkv_self_attn
+[2022-10-28 00:35:18] INFO main: Skipped layer_norm
+[2022-10-28 00:35:18] INFO main: Skipped softmax
+[2022-10-28 00:35:18] INFO main: Running selected 1/7 cases
+[2022-10-28 00:35:18] INFO main: [1/1] Benchmarking gpt_attention
+[2022-10-28 00:35:23] INFO bencher: Correctness checking for xFormers FlashAttn (cutlass) is passed
+[2022-10-28 00:35:23] WARNING bencher: Skip correctness checking for xFormers FlashAttn (triton): Forward failed
+[----- GPT Attention (Attn) and FlashAttention (FA) without mask ------]
+                                  |  HF (Attn)  |  xFormers cutlass (FA)
+1 threads: -------------------------------------------------------------
+      (8, 1024, 1024, 16, 50257)  |     14.9    |            6.0
+      (16, 512, 8192, 64, 50264)  |    184.4    |          164.8
+      (4, 2048, 8192, 64, 50264)  |    261.3    |          197.9
 
 Times are in milliseconds (ms).
 
-              Shape                 HF (Attn)    xFormers Cutlass (FA)
----------------------------------  -----------  -----------------------
- (8, 512, 1024, 16, 4096, 30522)     316.027            124.27
-(16, 512, 8192, 64, 32768, 50264)    3462.08            1672.07
-(4, 2048, 8192, 64, 32768, 50264)    9350.08            3208.07
+          Shape              HF (Attn)    xFormers cutlass (FA)
+--------------------------  -----------  -----------------------
+(8, 1024, 1024, 16, 50257)     1091              178.502
+(16, 512, 8192, 64, 50264)    2688.27            1284.02
+(4, 2048, 8192, 64, 50264)    8836.02            1284.02
 
-Memory is in MBs.
-
-[2/3] Benchmarking layer_norm
-Correctness checking for Apex (FP16) is passed
-Correctness checking for Triton (FP16) is passed
-Correctness checking for xFormers (FP16) is passed
-[---------------------------------------------------------- LayerNorm ----------------------------------------------------------]
-                       |  PyTorch (FP32)  |  Apex (FP32)  |  PyTorch (FP16)  |  Apex (FP16)  |  Triton (FP16)  |  xFormers (FP16)
-1 threads: ----------------------------------------------------------------------------------------------------------------------
-      (32, 128, 768)   |       203.7      |      213.7    |       147.0      |      216.3    |       749.1     |        866.7
-      (8, 512, 1024)   |       250.8      |      232.7    |       146.6      |      213.8    |       751.3     |        871.7
-      (16, 512, 8192)  |      4523.8      |     4287.9    |      2340.0      |     2470.8    |      2102.1     |       1424.1
-      (4, 2048, 8192)  |      4453.7      |     4274.0    |      2296.6      |     2527.1    |      2088.3     |       1420.3
-
-Times are in microseconds (us).
-
-     Shape        PyTorch (FP32)    Apex (FP32)    PyTorch (FP16)    Apex (FP16)    Triton (FP16)    xFormers (FP16)
----------------  ----------------  -------------  ----------------  -------------  ---------------  -----------------
-(32, 128, 768)       60.0547          60.1484         30.0488          30.1426         30.0488           30.8008
-(8, 512, 1024)       80.0586          80.1836         40.0508          40.1758         40.0508           41.0527
-(16, 512, 8192)       1280.2          1281.2          640.137          641.137         640.137           642.137
-(4, 2048, 8192)       1280.2          1281.2          640.137          641.137         640.137           642.137
-
-Memory is in MBs.
-
-[3/3] Benchmarking softmax
-Detected CUDA files, patching ldflags
-Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
-Building extension module scaled_upper_triang_masked_softmax_cuda...
-Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
-ninja: no work to do.
-Loading extension module scaled_upper_triang_masked_softmax_cuda...
-Detected CUDA files, patching ldflags
-Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
-Building extension module scaled_masked_softmax_cuda...
-Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
-ninja: no work to do.
-Loading extension module scaled_masked_softmax_cuda...
-Detected CUDA files, patching ldflags
-Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
-Building extension module scaled_softmax_cuda...
-Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
-ninja: no work to do.
-Loading extension module scaled_softmax_cuda...
-Detected CUDA files, patching ldflags
-Emitting ninja build file /home/ubuntu/workspace_hf/Megatron-LM/megatron/fused_kernels/build/build.ninja...
-Building extension module fused_mix_prec_layer_norm_cuda...
-Allowing ninja to set a default number of workers... (overridable by setting the environment variable MAX_JOBS=N)
-ninja: no work to do.
-Loading extension module fused_mix_prec_layer_norm_cuda...
-Correctness checking for Megatron-LM (Comp-FP32) (backward) is failed: Tensor-likes are not close!
-
-Mismatched elements: 2044451 / 16777216 (12.2%)
-Greatest absolute difference: 0.047679901123046875 at index (2, 14, 373, 375) (up to 0.001 allowed)
-Greatest relative difference: 1.0947146866230122 at index (2, 14, 373, 432) (up to 0.001 allowed)
-Correctness checking for Megatron-LM (Comp-FP32) is passed
-Correctness checking for xFormers (Comp-FP32) is passed
-[------------------------------------ Softmax with FP16 input -------------------------------------]
-                         |  PyTorch (Comp-FP32)  |  Megatron-LM (Comp-FP32)  |  xFormers (Comp-FP32)
-1 threads: -----------------------------------------------------------------------------------------
-      (4, 16, 512, 512)  |         1179.0        |           293.6           |         447.4
-      (8, 16, 512, 512)  |         2325.3        |           579.3           |         446.2
-
-Times are in microseconds (us).
-
-      Shape         PyTorch (Comp-FP32)    Megatron-LM (Comp-FP32)    xFormers (Comp-FP32)
------------------  ---------------------  -------------------------  ----------------------
-(4, 16, 512, 512)           944                      720                      656
-(8, 16, 512, 512)          1296                      848                      848
-
-Memory is in MBs.
+Memory is in MBs and excludes inputs/outputs.
 ```
 
-## Add an Operator
+## Module Injection
 
-WIP
+EPOI also provides two approaches for you to inject the covered moduels to your model
+as long as your model has a corresponding policy that specifies how to inject modules.
+
+If your model doesn't have a builtin injection policy, you could also custom one and
+register it:
+
+```python
+from epoi.inject import register_policy, ModuleInjectPolicy
+
+@register_policy
+class MyPolicy(ModuleInjectPolicy):
+  # Implement you policy (tutorial TBA)
+```
+
+### Module Injection after Initialization
+
+If you prefer to initialize the model first, you could inject modules as follows:
+
+```python
+from epoi.inject import inject_module
+
+model = init_model()
+inject_module(model)
+```
+
+You can refer to [this Jupyter notebook](notebooks/hf-clm-with-injection-single-device.ipynb) that uses this approach to inject modules to GPT2-medium.
+
+### Module Injection during Initialization
+
+**Note that this approach doesn't support model loading from a checkpoint yet.**
+
+If you have to inject modules during model initialization (e.g., train the model with ZeRO-3),
+you could inject modules as follows:
+
+```python
+from epoi.inject import InjectModuleContext
+
+with InjectModuleContext():
+  ...
+  model = init_model()
+```
+
+You can refer to [this Jupyter notebook](notebooks/hf-clm-with-injection-deepspeed.ipynb) that uses this approach
+to inject modules to GPT2-xl and trains with DeepSpeed ZeRO-3.
