@@ -1,5 +1,5 @@
 """Injection utilities."""
-from .policy import POLICIES
+from .policy import get_activate_policies
 
 
 def find_match_policy(module, policies):
@@ -13,7 +13,7 @@ def find_match_policy(module, policies):
 def inject_module(model, policy_clses=None):
     """Inject modules in the model."""
     policies = []
-    for policy_cls in policy_clses if policy_clses is not None else POLICIES:
+    for policy_cls in policy_clses if policy_clses is not None else get_activate_policies():
         policies.append(policy_cls())
     record = {}
 
@@ -47,7 +47,7 @@ class InjectModuleContext:
 
     def __init__(self, policies=None):
         self.policies = []
-        for policy_cls in policies if policies is not None else POLICIES:
+        for policy_cls in policies if policies is not None else get_activate_policies():
             self.policies.append(policy_cls())
         self.record = {}
 
