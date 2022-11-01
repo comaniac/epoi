@@ -1,6 +1,8 @@
 # EPOI specific
 **/log.txt
 **/transformers
+**/accelerate
+**/*.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
