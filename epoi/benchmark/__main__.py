@@ -71,7 +71,7 @@ def list_envs():
     # Other libs
     print("Other Libraries Configuration")
     data = [[lib] + list(get_version_n_commit(lib)) for lib in LIBS]
-    data = [info for info in data if info[1] != "N/A"]
+    data = [info for info in data if info[1] != "N/A" or info[2] != "N/A"]
     print(
         tabulate(
             data, headers=["Package", "Version", "Commit SHA"], stralign="center", numalign="center"

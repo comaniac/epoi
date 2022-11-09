@@ -24,7 +24,10 @@ def get_version_n_commit(lib_name):
     if hasattr(mod, "__version__"):
         version = mod.__version__
     else:
-        version = pkg_resources.get_distribution(lib_name).version
+        try:
+            version = pkg_resources.get_distribution(lib_name).version
+        except Exception:
+            version = "N/A"
 
     try:
         root_dir = os.path.dirname(os.path.dirname(os.path.abspath(mod.__file__)))

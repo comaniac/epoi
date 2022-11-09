@@ -158,8 +158,8 @@ def softmax(args):
             if inp is not None and inp.dtype in (torch.float32, torch.float16):
                 inp.grad = None
 
-    # (batch, head, seq, seq)
-    shapes = [(4, 16, 512, 512), (8, 16, 512, 512)]
+    # (batch, head, seq, seq). Note that head dimension may be sharded.
+    shapes = [(8, 16 // 8, 1024, 1024), (4, 16, 512, 512), (8, 16, 512, 512)]
     configs = [
         BenchConfig(
             lambda shape, dtype: _init(shape, dtype, True, "torch"),
@@ -198,7 +198,7 @@ def softmax(args):
     # Check correctness
     fun_pt = configs[0].init_func(shapes[0], configs[0].dtype)
     fun_megatron = configs[2].init_func(shapes[0], configs[1].dtype)
-    fun_xformers = configs[3].init_func(shapes[0], configs[2].dtype)
+    fun_xformers = configs[-1].init_func(shapes[0], configs[2].dtype)
     check_correctness(
         shapes[0], fun_pt, fun_megatron, configs[0], tol=1e-3, desc="Megatron-LM (Comp-FP32)"
     )

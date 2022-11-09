@@ -142,7 +142,8 @@ class BertSelfAttention(nn.Module):
         # The required attention mask shape is [batch_size x #heads, seq_length, seq_length];
         # while the input shape is [batch_size, 1, 1, seq_length].
         # In other words, we need to broadcast other dimensions manually.
-        attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)
+        if attention_mask is not None:
+            attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)
 
         context_layer = self.attn_op(
             query_layer, key_layer, value_layer, attention_mask, p=self.attention_probs_dropout_prob
