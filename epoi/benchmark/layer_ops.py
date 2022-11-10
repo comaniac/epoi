@@ -337,8 +337,9 @@ def t5_attention(args):
 
     # (batch, seq, hidden size, d_kv, n_head)
     shapes = [
-        (8, 1024, 512, 64, 16),  # t5-small
-        (8, 1024, 1024, 64, 16),  # t5-large
+        (4, 1024, 512, 64, 16),  # t5-small
+        (4, 1024, 1024, 64, 16),  # t5-large
+        (4, 2048, 1024, 64, 16),
     ]
     configs = [
         BenchConfig(
