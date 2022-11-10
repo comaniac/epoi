@@ -1,4 +1,6 @@
 """Model structure optimized ops."""
+from functools import partial
+
 import torch
 
 from .utils import is_available
@@ -184,13 +186,9 @@ def bert_attention(args):
             verbose=args.verbose,
         )
         if correct:
-
-            def _init_helper(name):
-                return lambda shape, dtype: _init(shape, dtype, name)
-
             configs.append(
                 BenchConfig(
-                    _init_helper(fun_xf_name),
+                    partial(_init, attn_op_name=fun_xf_name),
                     torch.float16,
                     f"xFormers {fun_xf_name} (FA)",
                     not args.forward_only,
@@ -278,13 +276,9 @@ def gpt_attention(args):
             verbose=args.verbose,
         )
         if correct:
-
-            def _init_helper(name):
-                return lambda shape, dtype: _init(shape, dtype, name)
-
             configs.append(
                 BenchConfig(
-                    _init_helper(name),
+                    partial(_init, attn_op_name=name),
                     torch.float16,
                     f"xFormers {name} (FA)",
                     not args.forward_only,
@@ -297,5 +291,98 @@ def gpt_attention(args):
         shapes,
         configs,
         "GPT Attention (Attn) and FlashAttention (FA) without mask",
+        verbose=args.verbose,
+    )
+
+
+def t5_attention(args):
+    if not is_available("transformers") or not is_available("xformers"):
+        logger.warning("Skip attention because transformers or xformers is not available")
+        return
+
+    from transformers import AutoConfig
+    from transformers.models.t5.modeling_t5 import T5Attention
+    from ..inject.policy.t5 import InjectHFT5AttentionPolicy
+
+    def _init(shape, dtype, attn_op_name, no_dropout=False):
+        config = AutoConfig.from_pretrained("t5-small")
+        config.d_model = shape[2]
+        config.d_kv = shape[3]
+        config.num_heads = shape[4]
+        if no_dropout:
+            config.dropout_rate = 0.0
+
+        attn = T5Attention(config)
+        if attn_op_name is not None:
+            attn = InjectHFT5AttentionPolicy.init_from_object(attn, attn_op_name=attn_op_name)
+        if dtype == torch.float16:
+            attn = attn.half()
+        return attn.cuda()
+
+    def gen_inputs(shape, dtype):
+        # (batch, seq, hidden size)
+        inp_shape = shape[:3]
+        hidden_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
+        attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
+        kv_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
+        return [hidden_states, attn_mask, kv_states]  # (hidden_states, mask, kv_states)
+
+    def zero_grad(mod, inputs):
+        inputs[0].grad = None
+        for param_name in ["q", "k", "v", "o"]:
+            if hasattr(mod, param_name):
+                getattr(mod, param_name).weight.grad = None
+                if getattr(mod, param_name).bias is not None:
+                    getattr(mod, param_name).bias.grad = None
+
+    # (batch, seq, hidden size, d_kv, n_head)
+    shapes = [
+        (8, 1024, 512, 64, 16),  # t5-small
+        (8, 1024, 1024, 64, 16),  # t5-large
+    ]
+    configs = [
+        BenchConfig(
+            lambda shape, dtype: _init(shape, dtype, None),
+            torch.float16,
+            "HF (Attn)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        ),
+    ]
+
+    # Check correctness. Note that we only use the native PyTorch implementation
+    # to disable weight scaling.
+    fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
+    fun_xf = _init(shapes[0], configs[0].dtype, "native", no_dropout=True)
+    InjectHFT5AttentionPolicy.assign_params(fun_xf, fun_attn)
+    check_correctness(
+        shapes[0],
+        fun_attn,
+        fun_xf,
+        configs[0],
+        tol=1e-3,
+        desc=f"xFormers FlashAttn (native w/o weight scaling)",
+        verbose=args.verbose,
+    )
+    logger.info(
+        "Skip correctness checking for CUTLASS and Triton due to not support weight scaling"
+    )
+
+    configs.append(
+        BenchConfig(
+            partial(_init, attn_op_name="cutlass"),
+            torch.float16,
+            f"xFormers cutlass (FA)",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+        )
+    )
+
+    return bench(
+        shapes,
+        configs,
+        "CrossAttention: T5 (Attn) and FlashAttention (FA)",
         verbose=args.verbose,
     )
