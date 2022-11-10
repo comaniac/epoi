@@ -1,12 +1,12 @@
 """Injection Policies."""
 from inspect import getmembers, ismodule
-from . import encoder, decoder
+from . import encoder, decoder, t5
 
 
 def init_policy_list():
     """Initialize policy list with builtin policies under the namespace."""
     policies = {}  # mapping from policy class to status (bool)
-    for parent_mod in [encoder, decoder]:
+    for parent_mod in [encoder, decoder, t5]:
         for name, mod in getmembers(parent_mod):
             if not ismodule(mod) and name.startswith("Inject") and name.endswith("Policy"):
                 policies[mod] = True
