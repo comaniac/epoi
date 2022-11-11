@@ -1,7 +1,10 @@
 """Encoder specific injection policies."""
-from hashlib import new
+import torch
+from torch import nn
+
 from .base import ModuleInjectPolicy
 from ..utils import get_arg, check_unsupported_arg
+from ...ops.torchscript_ops import FusedDropoutAddLayerNorm
 from ...ops.xformers_attn import GenericSelfAttention
 
 
@@ -79,3 +82,59 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
             return out
 
         return wrapped_forward
+
+
+class InjectHFBertOutputPolicy(ModuleInjectPolicy):
+    @staticmethod
+    def gen_init_config_from_object(orig, **kwargs):
+        args = {
+            "hidden_size": orig.dense.out_features,
+            "intermediate_size": orig.dense.in_features,
+            "layer_norm_eps": orig.LayerNorm.eps,
+            "hidden_dropout_prob": orig.dropout.p,
+        }
+        return args
+
+    @staticmethod
+    def gen_init_config_from_config(*args, **kwargs):
+        config = args[0]
+        new_args = {
+            "hidden_size": config.hidden_size,
+            "intermediate_size": config.intermediate_size,
+            "layer_norm_eps": config.layer_norm_eps,
+            "hidden_dropout_prob": config.hidden_dropout_prob,
+        }
+        return new_args
+
+    @staticmethod
+    def assign_params(this, orig):
+        this.fused_op.layer_norm.weight = orig.LayerNorm.weight
+        this.fused_op.layer_norm.bias = orig.LayerNorm.bias
+
+    @staticmethod
+    def target_modules():
+        """A list of target modules to be injected."""
+        import transformers.models.bert.modeling_bert
+
+        return [(transformers.models.bert.modeling_bert, "BertOutput")]
+
+    @staticmethod
+    def inject_module():
+        """The custom module to inject."""
+
+        class FusedBertOutput(nn.Module):
+            def __init__(self, intermediate_size, hidden_size, layer_norm_eps, hidden_dropout_prob):
+                super().__init__()
+                self.dense = nn.Linear(intermediate_size, hidden_size)
+                self.fused_op = FusedDropoutAddLayerNorm(
+                    hidden_size, hidden_dropout_prob, layer_norm_eps
+                )
+
+            def forward(
+                self, hidden_states: torch.Tensor, input_tensor: torch.Tensor
+            ) -> torch.Tensor:
+                hidden_states = self.dense(hidden_states)
+                hidden_states = self.fused_op(hidden_states, input_tensor)
+                return hidden_states
+
+        return FusedBertOutput

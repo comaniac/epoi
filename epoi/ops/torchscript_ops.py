@@ -1,8 +1,10 @@
 """The fused ops by torchscript."""
 from typing import List
+from functools import partial
 import math
 import torch
 import torch.nn.functional as F
+from functorch.compile import memory_efficient_fusion
 
 
 class BiasGeLUFunction(torch.autograd.Function):
@@ -70,18 +72,24 @@ def new_gelu(input):
     )
 
 
-@torch.jit.script
 def bias_new_gelu(input, bias):
     return new_gelu(input + bias)
 
 
 class FusedBiasNewGELU(torch.nn.Module):
-    def __init__(self, size, device=None, dtype=None, prev_weight=None, fused=True):
+    def __init__(self, size, device=None, dtype=None, prev_weight=None, fused=True, aot=True):
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.bias = torch.nn.Parameter(torch.empty(size, **factory_kwargs))
         self.fused = fused
         self.reset_parameters(prev_weight)
+        if self.fused:
+            if aot:
+                self.func = memory_efficient_fusion(bias_new_gelu)
+            else:
+                self.func = torch.jit.script(bias_new_gelu)
+        else:
+            self.func = bias_new_gelu
 
     def reset_parameters(self, prev_weight=None):
         range = (0, 1)
@@ -92,9 +100,7 @@ class FusedBiasNewGELU(torch.nn.Module):
         torch.nn.init.uniform_(self.bias, *range)
 
     def forward(self, input):
-        if self.fused:
-            return bias_new_gelu(input, self.bias)
-        return new_gelu(input + self.bias)
+        return self.func(input, self.bias)
 
 
 class MM(torch.nn.Module):
@@ -140,7 +146,7 @@ def fused_dropout_add_layernorm(
     normalized_shape: List[int],
     eps: float,
 ):
-    """torchscript tracable fused dropout, add, layernorm.
+    """torchscript tracable dropout-add-layernorm.
     (non-tensor arguments must have type annotations)
     """
     dropout_out = F.dropout(input1, dropout_prob, training=training)
@@ -150,23 +156,39 @@ def fused_dropout_add_layernorm(
 
 
 class FusedDropoutAddLayerNorm(torch.nn.Module):
-    def __init__(self, size, dropout_prob, eps=1e-5, fused=True):
+    def __init__(self, size, dropout_prob, eps=1e-5, fused=True, aot=False):
         super().__init__()
         self.layer_norm = torch.nn.LayerNorm(size, eps=eps)
         self.dropout_prob = dropout_prob
         self.fused = fused
+        if fused and aot:
+            # FIXME: it works fine in benchmark but failed with HF Trainer with
+            # RuntimeError: Trying to backward through the graph a second time
+            # (or directly access saved tensors after they have already been freed).
+            self.func = partial(
+                fused_dropout_add_layernorm,
+                dropout_prob=self.dropout_prob,
+                training=self.training,
+                eps=self.layer_norm.eps,
+                normalized_shape=self.layer_norm.normalized_shape,
+            )
+            self.func = memory_efficient_fusion(self.func)
+        else:
+            self.func = fused_dropout_add_layernorm
+            if fused:
+                self.func = torch.jit.script(self.func)
+            self.func = partial(
+                self.func,
+                dropout_prob=self.dropout_prob,
+                training=self.training,
+                eps=self.layer_norm.eps,
+                normalized_shape=self.layer_norm.normalized_shape,
+            )
 
     def forward(self, input1, input2):
-        func = fused_dropout_add_layernorm
-        func = torch.jit.script(func) if self.fused else func
-
-        return func(
+        return self.func(
             input1,
             input2,
             self.layer_norm.weight,
             self.layer_norm.bias,
-            self.dropout_prob,
-            self.training,
-            self.layer_norm.normalized_shape,
-            self.layer_norm.eps,
         )
