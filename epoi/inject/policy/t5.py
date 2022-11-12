@@ -1,6 +1,9 @@
 """T5 specific injection policies."""
+import torch
+
 from .base import ModuleInjectPolicy
 from ...ops.xformers_attn import T5Attention
+
 
 class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
     @staticmethod
@@ -36,7 +39,14 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def assign_params(this, orig):
-        this.q.weight = orig.q.weight
+        # xFormers' FlashAttention scales weights in the kernel, so we need to
+        # "unscale" them here.
+        scale = orig.key_value_proj_dim**0.5
+        this.q.weight = torch.nn.Parameter(
+            orig.q.weight * scale,
+            requires_grad=orig.q.weight.requires_grad,
+        )
+        # this.q.weight = orig.q.weight
         this.q.bias = orig.q.bias
         this.k.weight = orig.k.weight
         this.k.bias = orig.k.bias

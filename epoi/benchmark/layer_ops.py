@@ -185,7 +185,7 @@ def bert_attention(args):
             desc=f"xFormers {fun_xf_name} FlashAttn",
             verbose=args.verbose,
         )
-        if correct:
+        if correct is not None:
             configs.append(
                 BenchConfig(
                     partial(_init, attn_op_name=fun_xf_name),
@@ -275,7 +275,7 @@ def gpt_attention(args):
             desc=f"xFormers FlashAttn ({name})",
             verbose=args.verbose,
         )
-        if correct:
+        if correct is not None:
             configs.append(
                 BenchConfig(
                     partial(_init, attn_op_name=name),
@@ -355,31 +355,29 @@ def t5_attention(args):
     # Check correctness. Note that we only use the native PyTorch implementation
     # to disable weight scaling.
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    fun_xf = _init(shapes[0], configs[0].dtype, "native", no_dropout=True)
-    InjectHFT5AttentionPolicy.assign_params(fun_xf, fun_attn)
-    check_correctness(
-        shapes[0],
-        fun_attn,
-        fun_xf,
-        configs[0],
-        tol=1e-3,
-        desc=f"xFormers FlashAttn (native w/o weight scaling)",
-        verbose=args.verbose,
-    )
-    logger.info(
-        "Skip correctness checking for CUTLASS and Triton due to not support weight scaling"
-    )
-
-    configs.append(
-        BenchConfig(
-            partial(_init, attn_op_name="cutlass"),
-            torch.float16,
-            f"xFormers cutlass (FA)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
+    for name in ["cutlass", "triton"]:
+        fun_xf = _init(shapes[0], configs[0].dtype, name, no_dropout=True)
+        InjectHFT5AttentionPolicy.assign_params(fun_xf, fun_attn)
+        correct = check_correctness(
+            shapes[0],
+            fun_attn,
+            fun_xf,
+            configs[0],
+            tol=1e-3,
+            desc=f"xFormers FlashAttn ({name})",
+            verbose=args.verbose,
         )
-    )
+        if correct is not None:
+            configs.append(
+                BenchConfig(
+                    partial(_init, attn_op_name=name),
+                    torch.float16,
+                    f"xFormers {name} (FA)",
+                    not args.forward_only,
+                    gen_inputs=gen_inputs,
+                    zero_grad=zero_grad,
+                )
+            )
 
     return bench(
         shapes,

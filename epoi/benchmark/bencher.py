@@ -181,14 +181,14 @@ def bench(shapes, configs, label, verbose=False):
 def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=False):
     if func is None or func_ref is None:
         logger.warning(f"Correctness checking for {desc} failed at initialization")
-        return False
+        return None
 
     inputs = config.gen_inputs(shape, config.dtype)
     if skip_if(
         not test_func(func, inputs, None, config.zero_grad, verbose=verbose),
         f"correctness checking for {desc}: Forward failed",
     ):
-        return False
+        return None
 
     if config.backward:
         for inp in inputs:
@@ -203,7 +203,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
             not test_func(func, inputs, grads_input, config.zero_grad, verbose=verbose),
             f"correctness checking for {desc}: Backward failed",
         ):
-            return False
+            return None
         out = _forward_backward(func, inputs, grads_input)
         grads = [inp.grad for inp in inputs if inp is not None]
         config.zero_grad(func, inputs)

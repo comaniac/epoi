@@ -17,7 +17,7 @@ def pt_attention(q, k, v, attn_bias, p=0.0, weight_scaling=True):
     FlashAttention implemented in xformers. This is used mainly to check the correctness
     of the xformers implementation, so do not change the functionality of this function.
 
-    Note that weight_scaling is not supported in xFormers yet, so only use it for
+    Note that weight_scaling is not supported in xFormers, so it should only be used for
     correctness checking.
     """
     assert xformers is not None, "xformers is not installed"
@@ -460,7 +460,7 @@ class T5Attention(nn.Module):
 
         assert xformers is not None, "xformers is not installed"
         if attn_op_name == "native":
-            self.attn_op = partial(pt_attention, weight_scaling=False)
+            self.attn_op = pt_attention
         else:
             if attn_op_name == "vanilla":
                 op = xformers.ops.MemoryEfficientAttentionOp
