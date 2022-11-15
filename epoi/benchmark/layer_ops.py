@@ -422,13 +422,16 @@ def t5_attention(args):
                                 no_dropout=False,
                             ),
                             torch.float16,
-                            f"xFormers {name} (FA)",
+                            f"xFormers {name}",
                             not args.forward_only,
                             gen_inputs=partial(gen_inputs, cross_attn=cross_attn),
                             zero_grad=zero_grad,
                         )
                     )
 
+            if len(configs) == 1:
+                logger.warning(f"Skip {desc} because no xFormers FlashAttn is valid")
+                break
             bench(
                 shapes,
                 configs,

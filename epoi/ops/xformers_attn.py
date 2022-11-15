@@ -42,7 +42,7 @@ def pt_attention(q, k, v, attn_bias, p=0.0, weight_scaling=True):
             # equivalent to (q @ k.transpose(-2, -1) + m)
             # but faster, and is what is used in PyTorch now
             attn = torch.baddbmm(attn_bias, q, k.transpose(-2, -1))
-        attn = attn.softmax(-1)
+        attn = attn.float().softmax(-1).to(q.dtype)
         if p > 0:
             attn = torch.nn.functional.dropout(attn, p=p)
         return attn @ v
@@ -649,7 +649,7 @@ class T5Attention(nn.Module):
         # get query states
         query_states = shape(
             self.q(hidden_states)
-        )  # (batch_size, n_heads, seq_length, dim_per_head)
+        )  # (batch_size, seq_length, n_heads, dim_per_head)
 
         # get key/value states
         key_states = project(
