@@ -392,7 +392,7 @@ def t5_attention(args):
                 has_relative_attention_bias,
                 no_dropout=True,
             )
-            for name in ["native", "cutlass", "triton"]:
+            for name in ["native", "cutlass", "fctls_bflsh", "triton"]:
                 fun_xf = _init(
                     shapes[0],
                     configs[0].dtype,

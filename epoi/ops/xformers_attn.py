@@ -101,6 +101,8 @@ class BertSelfAttention(nn.Module):
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
+            elif attn_op_name == "fctls_bflsh":
+                op = xformers.ops.MemoryEfficientAttentionCutlassFwdFlashBwOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
@@ -231,6 +233,8 @@ class GPT2Attention(nn.Module):
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
+            elif attn_op_name == "fctls_bflsh":
+                op = xformers.ops.MemoryEfficientAttentionCutlassFwdFlashBwOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
@@ -364,6 +368,8 @@ class GenericSelfAttention(nn.Module):
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
+            elif attn_op_name == "fctls_bflsh":
+                op = xformers.ops.MemoryEfficientAttentionCutlassFwdFlashBwOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
@@ -421,7 +427,7 @@ class GenericSelfAttention(nn.Module):
             )
         else:
             if attention_mask is not None:
-                if self.attn_op_name in ["cutlass", "triton"]:
+                if self.attn_op_name in ["cutlass", "fctls_bflsh", "triton"]:
                     print_once(
                         f"WARNING: Attention op {self.attn_op_name} does not support attention mask. "
                         "The mask will be ignored"
@@ -500,6 +506,8 @@ class T5Attention(nn.Module):
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
+            elif attn_op_name == "fctls_bflsh":
+                op = xformers.ops.MemoryEfficientAttentionCutlassFwdFlashBwOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
@@ -693,7 +701,7 @@ class T5Attention(nn.Module):
                     # )
                     new_mask = None
                 else:
-                    if self.attn_op_name in ["cutlass", "triton"]:
+                    if self.attn_op_name in ["cutlass", "fctls_bflsh", "triton"]:
                         print_once(
                             f"WARNING: Attention op {self.attn_op_name} does not support "
                             "attention mask. The position bias and mask are ignored"
@@ -703,7 +711,7 @@ class T5Attention(nn.Module):
                         new_mask = position_bias
             else:
                 new_mask = position_bias.repeat(query_states.shape[0], 1, 1, 1)
-            
+
             if isinstance(new_mask, torch.Tensor):
                 new_mask = new_mask.reshape((-1,) + new_mask.shape[2:])
 
