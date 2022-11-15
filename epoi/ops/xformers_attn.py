@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Union
 from functools import partial
+import math
 
 import torch
 import torch.nn as nn
@@ -10,6 +11,14 @@ try:
     import xformers.ops
 except ImportError:
     xformers = None
+
+ATTN_GLOBAL_MSGS = set()
+
+
+def print_once(msg):
+    if msg not in ATTN_GLOBAL_MSGS:
+        print(msg, flush=True)
+        ATTN_GLOBAL_MSGS.add(msg)
 
 
 def pt_attention(q, k, v, attn_bias, p=0.0, weight_scaling=True):
@@ -30,7 +39,7 @@ def pt_attention(q, k, v, attn_bias, p=0.0, weight_scaling=True):
         if attn_bias is None:
             attn = q @ k.transpose(-2, -1)
         else:
-            # equivalent to (q @ k.transpose(-2, -1) + m).softmax(-1) @ v
+            # equivalent to (q @ k.transpose(-2, -1) + m)
             # but faster, and is what is used in PyTorch now
             attn = torch.baddbmm(attn_bias, q, k.transpose(-2, -1))
         attn = attn.softmax(-1)
@@ -53,7 +62,7 @@ class BertSelfAttention(nn.Module):
     Used for manual injection.
     """
 
-    def __init__(self, config, position_embedding_type=None, attn_op_name="cutlass"):
+    def __init__(self, config, position_embedding_type=None, attn_op_name="auto"):
         super().__init__()
         if config.hidden_size % config.num_attention_heads != 0 and not hasattr(
             config, "embedding_size"
@@ -84,17 +93,19 @@ class BertSelfAttention(nn.Module):
         self.is_decoder = config.is_decoder
 
         assert xformers is not None, "xformers is not installed"
-        if attn_op_name is None:
+        self.attn_op_name = attn_op_name
+        if attn_op_name == "native":
             self.attn_op = pt_attention
         else:
-            if attn_op_name == "vanilla":
+            if attn_op_name == "cuda":
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
-                raise ValueError(f"Unknown attn_op_name {attn_op_name}")
+                # When op=None, the attention op will be automatically selected.
+                op = None
 
             self.attn_op = lambda q, k, v, m, p: xformers.ops.memory_efficient_attention(
                 q, k, v, m, p, op=op
@@ -148,7 +159,16 @@ class BertSelfAttention(nn.Module):
         # while the input shape is [batch_size, 1, 1, seq_length].
         # In other words, we need to broadcast other dimensions manually.
         if attention_mask is not None:
-            attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)
+            if self.attn_op_name in ["cutlass", "triton"]:
+                print_once(
+                    f"WARNING: Attention op {self.attn_op_name} does not support attention mask. "
+                    "The mask will be ignored"
+                )
+                attention_mask = None
+            else:
+                attention_mask = self.layout_attention_mask(
+                    attention_mask, self.num_attention_heads
+                )
 
         context_layer = self.attn_op(
             query_layer, key_layer, value_layer, attention_mask, p=self.attention_probs_dropout_prob
@@ -168,7 +188,7 @@ class GPT2Attention(nn.Module):
     Used for manual injection.
     """
 
-    def __init__(self, config, is_cross_attention=False, layer_idx=None, attn_op_name="cutlass"):
+    def __init__(self, config, is_cross_attention=False, layer_idx=None, attn_op_name="auto"):
         super().__init__()
 
         self.embed_dim = config.hidden_size
@@ -204,17 +224,18 @@ class GPT2Attention(nn.Module):
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
 
         assert xformers is not None, "xformers is not installed"
-        if attn_op_name is None:
+        if attn_op_name == "native":
             self.attn_op = pt_attention
         else:
-            if attn_op_name == "vanilla":
+            if attn_op_name == "cuda":
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
-                raise ValueError(f"Unknown attn_op_name {attn_op_name}")
+                # When op=None, the attention op will be automatically selected.
+                op = None
 
             self.attn_op = partial(xformers.ops.memory_efficient_attention, op=op)
 
@@ -246,7 +267,7 @@ class GPT2Attention(nn.Module):
         output_attentions: Optional[bool] = False,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
         if attention_mask is not None:
-            print(
+            print_once(
                 f"WARNING: GPT2Attention only supports builtin casual mask for now. "
                 "The given attention mask is ignored."
             )
@@ -304,7 +325,7 @@ class GenericSelfAttention(nn.Module):
         is_decoder,
         attn_pdrop=0.0,
         resid_pdrop=0.0,
-        attn_op_name="cutlass",
+        attn_op_name="auto",
         fused_qkv=False,
     ):
         super().__init__()
@@ -335,17 +356,19 @@ class GenericSelfAttention(nn.Module):
             self.resid_dropout = nn.Dropout(resid_pdrop)
 
         assert xformers is not None, "xformers is not installed"
-        if attn_op_name is None:
+        self.attn_op_name = attn_op_name
+        if attn_op_name == "native":
             self.attn_op = pt_attention
         else:
-            if attn_op_name == "vanilla":
+            if attn_op_name == "cuda":
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
-                raise ValueError(f"Unknown attn_op_name {attn_op_name}")
+                # When op=None, the attention op will be automatically selected.
+                op = None
 
             self.attn_op = partial(xformers.ops.memory_efficient_attention, op=op)
 
@@ -397,10 +420,20 @@ class GenericSelfAttention(nn.Module):
                 [1, seq_len, seq_len], dtype=query_layer.dtype, device="cuda"
             )
         else:
-            # The required attention mask shape is [batch_size x #heads, seq_length, seq_length];
-            # while the input shape is [batch_size, 1, 1, seq_length].
-            # In other words, we need to broadcast other dimensions manually.
-            attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)
+            if attention_mask is not None:
+                if self.attn_op_name in ["cutlass", "triton"]:
+                    print_once(
+                        f"WARNING: Attention op {self.attn_op_name} does not support attention mask. "
+                        "The mask will be ignored"
+                    )
+                    attention_mask = None
+                else:
+                    # Required attention mask shape: [batch_size x #heads, seq_length, seq_length].
+                    # The input shape is [batch_size, 1, 1, seq_length].
+                    # In other words, we need to broadcast other dimensions manually.
+                    attention_mask = self.layout_attention_mask(
+                        attention_mask, self.num_attention_heads
+                    )
 
         context_layer = self.attn_op(
             query_layer, key_layer, value_layer, attention_mask, p=self.attn_pdrop
@@ -433,7 +466,7 @@ class T5Attention(nn.Module):
         num_heads,
         dropout_rate,
         has_relative_attention_bias=False,
-        attn_op_name="cutlass",
+        attn_op_name="auto",
     ):
         super().__init__()
         self.is_decoder = is_decoder
@@ -459,17 +492,19 @@ class T5Attention(nn.Module):
         self.gradient_checkpointing = False
 
         assert xformers is not None, "xformers is not installed"
+        self.attn_op_name = attn_op_name
         if attn_op_name == "native":
             self.attn_op = pt_attention
         else:
-            if attn_op_name == "vanilla":
+            if attn_op_name == "cuda":
                 op = xformers.ops.MemoryEfficientAttentionOp
             elif attn_op_name == "cutlass":
                 op = xformers.ops.MemoryEfficientAttentionCutlassOp
             elif attn_op_name == "triton":
                 op = xformers.ops.MemoryEfficientAttentionFlashAttentionOp
             else:
-                raise ValueError(f"Unknown attn_op_name {attn_op_name}")
+                # When op=None, the attention op will be automatically selected.
+                op = None
 
             self.attn_op = partial(xformers.ops.memory_efficient_attention, op=op)
 
@@ -540,16 +575,6 @@ class T5Attention(nn.Module):
             0
         )  # shape (1, num_heads, query_length, key_length)
         return values
-
-    @staticmethod
-    def layout_attention_mask(mask, num_attention_heads):
-        # (B, 1, 1, S) -> (B, S)
-        mask = mask.squeeze()
-        # (B, S) -> (B, 1, S)
-        mask = mask.reshape((mask.shape[0], 1, mask.shape[1]))
-        # (B, 1, S) -> (B x H, S, S)
-        mask = mask.repeat(num_attention_heads, mask.shape[2], 1)
-        return mask
 
     def forward(
         self,
@@ -656,7 +681,32 @@ class T5Attention(nn.Module):
                     position_bias + mask
                 )  # (batch_size, n_heads, seq_length, key_length)
 
-        new_mask = self.layout_attention_mask(mask, self.n_heads)
+                if self.is_decoder:
+                    print_once(
+                        f"WARNING: Now only supports builtin casual mask in decoder. "
+                        "The position bias and given attention mask are ignored."
+                    )
+                    # FIXME
+                    # seq_len = query_states.shape[1]
+                    # new_mask = xformers.ops.LowerTriangularMask(
+                    #     [1, seq_len, seq_len], dtype=query_states.dtype, device="cuda"
+                    # )
+                    new_mask = None
+                else:
+                    if self.attn_op_name in ["cutlass", "triton"]:
+                        print_once(
+                            f"WARNING: Attention op {self.attn_op_name} does not support "
+                            "attention mask. The position bias and mask are ignored"
+                        )
+                        new_mask = None
+                    else:
+                        new_mask = position_bias
+            else:
+                new_mask = position_bias.repeat(query_states.shape[0], 1, 1, 1)
+            
+            if isinstance(new_mask, torch.Tensor):
+                new_mask = new_mask.reshape((-1,) + new_mask.shape[2:])
+
         attn_output = self.attn_op(query_states, key_states, value_states, new_mask, p=self.dropout)
         attn_output = unshape(attn_output)
         attn_output = self.o(attn_output)

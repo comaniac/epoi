@@ -173,7 +173,7 @@ def bert_attention(args):
 
     # Check correctness
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    for fun_xf_name in ["vanilla", "cutlass", "triton"]:
+    for fun_xf_name in ["cutlass", "triton"]:
         fun_xf = _init(shapes[0], configs[0].dtype, fun_xf_name, no_dropout=True)
         InjectHFBertSelfAttentionPolicy.assign_params(fun_xf, fun_attn)
         correct = check_correctness(
@@ -304,27 +304,35 @@ def t5_attention(args):
     from transformers.models.t5.modeling_t5 import T5Attention
     from ..inject.policy.t5 import InjectHFT5AttentionPolicy
 
-    def _init(shape, dtype, attn_op_name, no_dropout=False):
+    def _init(
+        shape, dtype, attn_op_name, is_decoder, has_relative_attention_bias, no_dropout=False
+    ):
         config = AutoConfig.from_pretrained("t5-small")
+        config.is_encoder_decoder = False
+        config.is_decoder = is_decoder
         config.d_model = shape[2]
         config.d_kv = shape[3]
         config.num_heads = shape[4]
         if no_dropout:
             config.dropout_rate = 0.0
 
-        attn = T5Attention(config)
+        attn = T5Attention(config, has_relative_attention_bias=has_relative_attention_bias)
         if attn_op_name is not None:
             attn = InjectHFT5AttentionPolicy.init_from_object(attn, attn_op_name=attn_op_name)
         if dtype == torch.float16:
             attn = attn.half()
         return attn.cuda()
 
-    def gen_inputs(shape, dtype):
+    def gen_inputs(shape, dtype, cross_attn=True):
         # (batch, seq, hidden size)
         inp_shape = shape[:3]
         hidden_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
+        # FIXME: Random mask when attention op supports tensor type attention mask.
         attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
-        kv_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
+        if cross_attn:
+            kv_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
+        else:
+            kv_states = None
         return [hidden_states, attn_mask, kv_states]  # (hidden_states, mask, kv_states)
 
     def zero_grad(mod, inputs):
@@ -341,47 +349,89 @@ def t5_attention(args):
         (4, 1024, 1024, 64, 16),  # t5-large
         (4, 2048, 1024, 64, 16),
     ]
-    configs = [
-        BenchConfig(
-            lambda shape, dtype: _init(shape, dtype, None),
-            torch.float16,
-            "HF (Attn)",
-            not args.forward_only,
-            gen_inputs=gen_inputs,
-            zero_grad=zero_grad,
-        ),
-    ]
 
-    # Check correctness. Note that we only use the native PyTorch implementation
-    # to disable weight scaling.
-    fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    for name in ["cutlass", "triton"]:
-        fun_xf = _init(shapes[0], configs[0].dtype, name, no_dropout=True)
-        InjectHFT5AttentionPolicy.assign_params(fun_xf, fun_attn)
-        correct = check_correctness(
-            shapes[0],
-            fun_attn,
-            fun_xf,
-            configs[0],
-            tol=1e-3,
-            desc=f"xFormers FlashAttn ({name})",
-            verbose=args.verbose,
-        )
-        if correct is not None:
-            configs.append(
-                BenchConfig(
-                    partial(_init, attn_op_name=name),
-                    torch.float16,
-                    f"xFormers {name} (FA)",
-                    not args.forward_only,
-                    gen_inputs=gen_inputs,
-                    zero_grad=zero_grad,
-                )
+    # FIXME: Include has_relative_attention_bias when attention op supports tensor type mask.
+    has_relative_attention_bias = False
+
+    # Encoder, SelfAttention: has_relative_attention_bias=True since the 2nd layer.
+    # Decoder, SelfAttention: has_relative_attention_bias=True since the 2nd layer.
+    # Decoder, CrossAttention: has_relative_attention_bias=False. kv_states is not None.
+    for is_decoder in [False, True]:
+        for cross_attn in [False, True]:
+            if not is_decoder and cross_attn:
+                # Cross attention only happens in decoder.
+                continue
+            desc = (
+                f"{'Decoder' if is_decoder else 'Encoder'}"
+                + f"{'Cross' if cross_attn else 'Self'}Attention"
             )
 
-    return bench(
-        shapes,
-        configs,
-        "CrossAttention: T5 (Attn) and FlashAttention (FA)",
-        verbose=args.verbose,
-    )
+            configs = [
+                BenchConfig(
+                    partial(
+                        _init,
+                        attn_op_name=None,
+                        is_decoder=is_decoder,
+                        has_relative_attention_bias=has_relative_attention_bias,
+                        no_dropout=False,
+                    ),
+                    torch.float16,
+                    "HF (Attn)",
+                    not args.forward_only,
+                    gen_inputs=partial(gen_inputs, cross_attn=cross_attn),
+                    zero_grad=zero_grad,
+                ),
+            ]
+
+            # Check correctness.
+            fun_attn = _init(
+                shapes[0],
+                configs[0].dtype,
+                None,
+                is_decoder,
+                has_relative_attention_bias,
+                no_dropout=True,
+            )
+            for name in ["native", "cutlass", "triton"]:
+                fun_xf = _init(
+                    shapes[0],
+                    configs[0].dtype,
+                    name,
+                    is_decoder,
+                    has_relative_attention_bias,
+                    no_dropout=True,
+                )
+                InjectHFT5AttentionPolicy.assign_params(fun_xf, fun_attn)
+                correct = check_correctness(
+                    shapes[0],
+                    fun_attn,
+                    fun_xf,
+                    configs[0],
+                    tol=1e-3,
+                    desc=f"{desc} by xFormers FlashAttn ({name})",
+                    verbose=args.verbose,
+                )
+                if correct is not None:
+                    configs.append(
+                        BenchConfig(
+                            partial(
+                                _init,
+                                attn_op_name=name,
+                                is_decoder=is_decoder,
+                                has_relative_attention_bias=has_relative_attention_bias,
+                                no_dropout=False,
+                            ),
+                            torch.float16,
+                            f"xFormers {name} (FA)",
+                            not args.forward_only,
+                            gen_inputs=partial(gen_inputs, cross_attn=cross_attn),
+                            zero_grad=zero_grad,
+                        )
+                    )
+
+            bench(
+                shapes,
+                configs,
+                f"{desc}: T5 (Attn) and FlashAttention (FA)",
+                verbose=args.verbose,
+            )

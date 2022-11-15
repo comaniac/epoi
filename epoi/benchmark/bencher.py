@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Tuple
 import gc
 import traceback
 
@@ -19,6 +19,7 @@ class BenchConfig:
     dtype: torch.dtype = torch.float32
     desc: str = "N/A"
     backward: bool = True
+    requires_grad: Tuple[bool] = (True, False, ...)
     gen_inputs: Callable = lambda shape, dtype: [torch.randn(*shape, dtype=dtype, device="cuda")]
     zero_grad: Callable = lambda func, inputs: None
 
@@ -54,16 +55,36 @@ class MemoryMeasurement:
         print(tabulate(data, headers=headers, stralign="center", numalign="center"))
         print("\nMemory is in MBs and excludes inputs/outputs.\n")
 
+def expand_requires_grad(requires_grad, target_len):
+    requires_grad = list(requires_grad[:-1]) + [requires_grad[-2]] * (
+        target_len - len(requires_grad) + 1
+    )
+    return requires_grad
 
-def gen_output_like(func, inputs):
+
+def gen_output_like(func, inputs, requires_grad):
     with torch.no_grad():
         try:
             out = func(*inputs)
         except:
             return None
+
     if isinstance(out, (list, tuple)):
-        ret = [torch.rand_like(o) if o is not None else None for o in out]
+        if len(out) > len(requires_grad) - 1:
+            if not isinstance(requires_grad[-1], type(...)):
+                raise ValueError(
+                    "requires_grad must have the same length as out, "
+                    "or the end with '...' to repeat the last value."
+                )
+            else:
+                requires_grad = expand_requires_grad(requires_grad, len(out))
+        # ret = []
+        # for out_tensor, req in zip(out, requires_grad):
+        #     if req:
+        #         ret.append(torch.rand_like(out_tensor))
+        ret = [torch.rand_like(o) if r else None for o, r in zip(out, requires_grad)]
     else:
+        assert requires_grad[0], "Single output must require grad"
         ret = torch.rand_like(out)
     return ret
 
@@ -77,9 +98,14 @@ def _forward_only(func, inputs, grad=None, zero_grad_fn=None):
 def _forward_backward(func, inputs, grad, zero_grad_fn=None):
     out = func(*inputs)
     if isinstance(out, (list, tuple)):
-        out = [o for o in out if o is not None]
-        grad = [g for g in grad if g is not None]
-    torch.autograd.backward(out, grad)
+        assert len(out) == len(grad), f"len(out)={len(out)} != len(grad)={len(grad)}"
+        target_out = []
+        target_grad = []
+        for o, g in zip(out, grad):
+            if g is not None:
+                target_out.append(o)
+                target_grad.append(g)
+    torch.autograd.backward(target_out, target_grad)
     if zero_grad_fn is not None:
         zero_grad_fn(func, inputs)
     torch.cuda.synchronize()
@@ -143,7 +169,7 @@ def bench(shapes, configs, label, verbose=False):
                 if hasattr(func, "train"):
                     func.train()
                 global_dict["_run"] = _forward_backward
-                global_dict["grad"] = gen_output_like(func, inputs)
+                global_dict["grad"] = gen_output_like(func, inputs, config.requires_grad)
 
                 if skip_if(
                     not test_func(
@@ -194,7 +220,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
         for inp in inputs:
             if inp is not None:
                 inp.requires_grad = inp.dtype in (torch.float32, torch.float16)
-        grads_input = gen_output_like(func_ref, inputs)
+        grads_input = gen_output_like(func_ref, inputs, config.requires_grad)
         out_ref = _forward_backward(func_ref, inputs, grads_input)
         grads_ref = [inp.grad for inp in inputs if inp is not None]
         config.zero_grad(func_ref, inputs)
