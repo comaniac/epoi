@@ -10,7 +10,7 @@ class ModuleInjectPolicy:
         """Initialize an instance from a created object."""
         args = cls.gen_init_config_from_object(orig, **kwargs)
         ret = cls.inject_module()(**args)
-        cls.assign_params(ret, orig)
+        cls.assign_params(ret, orig, **kwargs)
         cls.wrap_forward(cls, orig.__class__, ret)
         return ret
 
@@ -94,7 +94,7 @@ class ModuleInjectPolicy:
         raise NotImplementedError()
 
     @staticmethod
-    def assign_params(this, orig):
+    def assign_params(this, orig, **kwargs):
         """Assign the parameters in the original module to the injected module."""
         raise NotImplementedError()
 

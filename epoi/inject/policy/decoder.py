@@ -69,7 +69,7 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
         return new_args
 
     @staticmethod
-    def assign_params(this, orig):
+    def assign_params(this, orig, **kwargs):
         from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 
         if isinstance(orig, GPT2Attention):
@@ -193,7 +193,7 @@ class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
         return args
 
     @staticmethod
-    def assign_params(this, orig):
+    def assign_params(this, orig, **kwargs):
         from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
         from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoMLP
         from transformers.models.gptj.modeling_gptj import GPTJMLP

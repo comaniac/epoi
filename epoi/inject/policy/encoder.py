@@ -35,7 +35,7 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
         return new_args
 
     @staticmethod
-    def assign_params(this, orig):
+    def assign_params(this, orig, **kwargs):
         this.query.weight = orig.query.weight
         this.query.bias = orig.query.bias
         this.key.weight = orig.key.weight
@@ -107,7 +107,7 @@ class InjectHFBertOutputPolicy(ModuleInjectPolicy):
         return new_args
 
     @staticmethod
-    def assign_params(this, orig):
+    def assign_params(this, orig, **kwargs):
         this.fused_op.layer_norm.weight = orig.LayerNorm.weight
         this.fused_op.layer_norm.bias = orig.LayerNorm.bias
 

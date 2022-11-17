@@ -2,7 +2,7 @@
 import torch
 
 from .base import ModuleInjectPolicy
-from ...ops.xformers_attn import T5Attention
+from ...ops.xformers_attn import T5Attention, check_xformer_op_support
 
 
 class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
@@ -38,15 +38,19 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
         return new_args
 
     @staticmethod
-    def assign_params(this, orig):
-        # xFormers' FlashAttention scales weights in the kernel, so we need to
-        # "unscale" them here.
-        scale = orig.key_value_proj_dim**0.5
-        this.q.weight = torch.nn.Parameter(
-            orig.q.weight * scale,
-            requires_grad=orig.q.weight.requires_grad,
-        )
-        # this.q.weight = orig.q.weight
+    def assign_params(this, orig, **kwargs):
+        attn_op_name = kwargs.get("attn_op_name", "cutlass")
+        custom_scale, _ = check_xformer_op_support(attn_op_name)
+        # xFormers' kernel scales weights by default, so we may need to
+        # "unscale" them here if the kernel does not support custom scale value.
+        if not custom_scale:
+            scale = orig.key_value_proj_dim**0.5
+            this.q.weight = torch.nn.Parameter(
+                orig.q.weight * scale,
+                requires_grad=orig.q.weight.requires_grad,
+            )
+        else:
+            this.q.weight = orig.q.weight
         this.q.bias = orig.q.bias
         this.k.weight = orig.k.weight
         this.k.bias = orig.k.bias
@@ -54,6 +58,8 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
         this.v.bias = orig.v.bias
         this.o.weight = orig.o.weight
         this.o.bias = orig.o.bias
+        if hasattr(orig, "relative_attention_bias"):
+            this.relative_attention_bias.weight = orig.relative_attention_bias.weight
 
     @staticmethod
     def target_modules():

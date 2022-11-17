@@ -84,9 +84,11 @@ def layer_norm(args):
     fun_apex = configs[3].init_func(shapes[0], configs[3].dtype)
     fun_triton = configs[4].init_func(shapes[0], configs[4].dtype)
     fun_xformers = configs[5].init_func(shapes[0], configs[5].dtype)
-    check_correctness(shapes[0], fun_pt, fun_apex, configs[2], tol=1e-3, desc="Apex (FP16)")
-    check_correctness(shapes[0], fun_pt, fun_triton, configs[2], tol=1e-3, desc="Triton (FP16)")
-    check_correctness(shapes[0], fun_pt, fun_xformers, configs[2], tol=1e-3, desc="xFormers (FP16)")
+    check_correctness(shapes[0], fun_pt, fun_apex, configs[2], fwd_tol=1e-3, desc="Apex (FP16)")
+    check_correctness(shapes[0], fun_pt, fun_triton, configs[2], fwd_tol=1e-3, desc="Triton (FP16)")
+    check_correctness(
+        shapes[0], fun_pt, fun_xformers, configs[2], fwd_tol=1e-3, desc="xFormers (FP16)"
+    )
 
     # Benchmark
     return bench(shapes, configs, "LayerNorm", verbose=args.verbose)
@@ -200,10 +202,10 @@ def softmax(args):
     fun_megatron = configs[2].init_func(shapes[0], configs[1].dtype)
     fun_xformers = configs[-1].init_func(shapes[0], configs[2].dtype)
     check_correctness(
-        shapes[0], fun_pt, fun_megatron, configs[0], tol=1e-3, desc="Megatron-LM (Comp-FP32)"
+        shapes[0], fun_pt, fun_megatron, configs[0], fwd_tol=1e-3, desc="Megatron-LM (Comp-FP32)"
     )
     check_correctness(
-        shapes[0], fun_pt, fun_xformers, configs[0], tol=1e-3, desc="xFormers (Comp-FP32)"
+        shapes[0], fun_pt, fun_xformers, configs[0], fwd_tol=1e-3, desc="xFormers (Comp-FP32)"
     )
 
     # Benchmark

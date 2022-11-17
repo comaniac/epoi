@@ -55,6 +55,7 @@ class MemoryMeasurement:
         print(tabulate(data, headers=headers, stralign="center", numalign="center"))
         print("\nMemory is in MBs and excludes inputs/outputs.\n")
 
+
 def expand_requires_grad(requires_grad, target_len):
     requires_grad = list(requires_grad[:-1]) + [requires_grad[-2]] * (
         target_len - len(requires_grad) + 1
@@ -62,7 +63,7 @@ def expand_requires_grad(requires_grad, target_len):
     return requires_grad
 
 
-def gen_output_like(func, inputs, requires_grad):
+def gen_grad(func, inputs, requires_grad):
     with torch.no_grad():
         try:
             out = func(*inputs)
@@ -78,14 +79,10 @@ def gen_output_like(func, inputs, requires_grad):
                 )
             else:
                 requires_grad = expand_requires_grad(requires_grad, len(out))
-        # ret = []
-        # for out_tensor, req in zip(out, requires_grad):
-        #     if req:
-        #         ret.append(torch.rand_like(out_tensor))
-        ret = [torch.rand_like(o) if r else None for o, r in zip(out, requires_grad)]
+        ret = [torch.ones_like(o) if r else None for o, r in zip(out, requires_grad)]
     else:
         assert requires_grad[0], "Single output must require grad"
-        ret = torch.rand_like(out)
+        ret = torch.ones_like(out)
     return ret
 
 
@@ -169,7 +166,7 @@ def bench(shapes, configs, label, verbose=False):
                 if hasattr(func, "train"):
                     func.train()
                 global_dict["_run"] = _forward_backward
-                global_dict["grad"] = gen_output_like(func, inputs, config.requires_grad)
+                global_dict["grad"] = gen_grad(func, inputs, config.requires_grad)
 
                 if skip_if(
                     not test_func(
@@ -204,7 +201,9 @@ def bench(shapes, configs, label, verbose=False):
     return compare, memory_results
 
 
-def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=False):
+def check_correctness(
+    shape, func_ref, func, config, fwd_tol=5e-2, bwd_tol=5e-2, desc="", verbose=False
+):
     if func is None or func_ref is None:
         logger.warning(f"Correctness checking for {desc} failed at initialization")
         return None
@@ -220,7 +219,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
         for inp in inputs:
             if inp is not None:
                 inp.requires_grad = inp.dtype in (torch.float32, torch.float16)
-        grads_input = gen_output_like(func_ref, inputs, config.requires_grad)
+        grads_input = gen_grad(func_ref, inputs, config.requires_grad)
         out_ref = _forward_backward(func_ref, inputs, grads_input)
         grads_ref = [inp.grad for inp in inputs if inp is not None]
         config.zero_grad(func_ref, inputs)
@@ -239,7 +238,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
 
     # Check forward.
     try:
-        torch.testing.assert_close(out, out_ref, rtol=tol, atol=tol)
+        torch.testing.assert_close(out, out_ref, atol=fwd_tol, rtol=fwd_tol)
     except Exception as err:
         logger.warning(f"Correctness checking for {desc} (forward) is failed: {err}")
         return False
@@ -248,7 +247,7 @@ def check_correctness(shape, func_ref, func, config, tol=1e-5, desc="", verbose=
     if config.backward:
         for grad, grad_ref in zip(grads, grads_ref):
             try:
-                torch.testing.assert_close(grad, grad_ref, rtol=tol, atol=tol)
+                torch.testing.assert_close(grad, grad_ref, atol=bwd_tol, rtol=bwd_tol)
             except Exception as err:
                 logger.warning(f"Correctness checking for {desc} (backward) is failed: {err}")
                 return False
