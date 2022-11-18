@@ -92,6 +92,56 @@ def check_xformer_op_support(ref_op_or_name=None):
     return custom_scale, ty_bias
 
 
+class MemoryEfficientAttentionOp(nn.Module):
+    """A wrapper module that processes HF attention mask to xformers attention mask."""
+
+    def __init__(self, attn_op_name, is_decoder):
+        super().__init__()
+        assert xformers is not None, "xformers is not installed"
+        self.attn_op_name = attn_op_name
+        self.op = get_attn_op_by_name(attn_op_name)
+        self.is_decoder = is_decoder
+        _, self.xformer_with_ty_bias = check_xformer_op_support(self.op)
+        if self.attn_op_name == "native":
+            self.attn_fn = attention_native
+        else:
+            # When op=None, the attention op will be automatically selected.
+            self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
+
+    def forward(self, query_layer, key_layer, value_layer, attention_mask, p):
+        # Check if the assigned xformer op supports this input case if it is specified.
+        if self.op is not None:
+            dispatch = xformers.ops.AttentionOpDispatch.from_arguments(
+                query_layer, key_layer, value_layer, attention_mask, p=p
+            )
+            if not self.op.supports(dispatch):
+                print_once(
+                    f"WARNING: The specified attention op {self.attn_op_name} does not support "
+                    f"this input config (usually dropout and attention bias/mask type): {dispatch} "
+                    "So the result may be inconsistent with the original module."
+                )
+
+        if self.is_decoder:
+            if attention_mask is not None:
+                print_once(
+                    f"WARNING: We always apply causal mask for decoder for now. "
+                    "The given attention mask will be ignored"
+                )
+            seq_len = query_layer.shape[1]
+            attention_mask = xformers.ops.LowerTriangularMask(
+                [1, seq_len, seq_len], dtype=query_layer.dtype, device="cuda"
+            )
+        else:
+            if attention_mask is not None and not self.xformer_with_ty_bias:
+                print_once(
+                    f"WARNING: Attention op {self.op} does not support "
+                    "attention mask. The mask will be ignored"
+                )
+                attention_mask = None
+
+        return self.attn_fn(query_layer, key_layer, value_layer, attention_mask, p=p)
+
+
 class GenericSelfAttention(nn.Module):
     """A generic self attention module to use the xformers attention op.
     Note that this module has limited supports to specialized processing, documetned as follows:
@@ -137,21 +187,7 @@ class GenericSelfAttention(nn.Module):
             self.out_proj = nn.Linear(hidden_size, hidden_size)
             self.resid_dropout = nn.Dropout(resid_pdrop)
 
-        assert xformers is not None, "xformers is not installed"
-        self.attn_op_name = attn_op_name
-        self.op = get_attn_op_by_name(attn_op_name)
-        _, self.xformer_with_ty_bias = check_xformer_op_support(self.op)
-        if attn_op_name == "native":
-            self.attn_fn = attention_native
-        else:
-            # When op=None, the attention op will be automatically selected.
-            self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
-
-    def reshape_for_scores(self, x: torch.Tensor) -> torch.Tensor:
-        """Copy from transpose_for_scores but without the transpose"""
-        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
-        x = x.view(new_x_shape)
-        return x
+        self.attn_op = MemoryEfficientAttentionOp(attn_op_name, self.is_decoder)
 
     @staticmethod
     def layout_attention_mask(mask, num_attention_heads):
@@ -159,7 +195,13 @@ class GenericSelfAttention(nn.Module):
         mask = mask.repeat(1, num_attention_heads, mask.shape[-1], 1)
         # (B, H, S, S) -> (B x H, S, S)
         mask = mask.reshape((-1), mask.shape[-2], mask.shape[-1])
-        return mask
+        return mask.contiguous()
+
+    def reshape_for_scores(self, x: torch.Tensor) -> torch.Tensor:
+        """Copy from transpose_for_scores but without the transpose"""
+        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        x = x.view(new_x_shape)
+        return x
 
     def forward(
         self,
@@ -185,44 +227,21 @@ class GenericSelfAttention(nn.Module):
             key_layer = torch.cat((past_key, key_layer), dim=-2)
             value_layer = torch.cat((past_value, value_layer), dim=-2)
 
-        # Check if the assigned xformer op supports this input case if it is specified.
-        if self.op is not None:
-            dispatch = xformers.ops.AttentionOpDispatch.from_arguments(
-                query_layer, key_layer, value_layer, attention_mask, p=self.attn_pdrop
-            )
-            if not self.op.supports(dispatch):
-                print_once(
-                    f"WARNING: The specified attention op {self.op} does not support "
-                    f"this input config (usually dropout and attention bias/mask type): {dispatch} "
-                    "So the result may be inconsistent with the original module."
-                )
+        if attention_mask is not None:
+            # Required attention mask shape: [batch_size x #heads, seq_length, seq_length].
+            # The input shape is [batch_size, 1, 1, seq_length].
+            # In other words, we need to broadcast other dimensions manually.
+            attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)
 
-        if self.is_decoder and attention_mask is None:
-            seq_len = query_layer.shape[1]
-            attention_mask = xformers.ops.LowerTriangularMask(
-                [1, seq_len, seq_len], dtype=query_layer.dtype, device="cuda"
-            )
-        else:
-            if attention_mask is not None:
-                if not self.xformer_with_ty_bias:
-                    print_once(
-                        f"WARNING: Attention op {self.attn_op_name} does not support "
-                        "attention mask. The mask will be ignored"
-                    )
-                    attention_mask = None
-                else:
-                    # Required attention mask shape: [batch_size x #heads, seq_length, seq_length].
-                    # The input shape is [batch_size, 1, 1, seq_length].
-                    # In other words, we need to broadcast other dimensions manually.
-                    attention_mask = self.layout_attention_mask(
-                        attention_mask, self.num_attention_heads
-                    )
-
-        context_layer = self.attn_fn(
-            query_layer, key_layer, value_layer, attention_mask, p=self.attn_pdrop
+        context_layer = self.attn_op(
+            query_layer.contiguous(),
+            key_layer.contiguous(),
+            value_layer.contiguous(),
+            attention_mask,
+            p=self.attn_pdrop,
         )
         context_layer = context_layer.contiguous()
-        new_context_layer_shape = context_layer.size()[:-2] + (self.all_head_size,)
+        new_context_layer_shape = context_layer.size()[:-2] + (-1,)
         context_layer = context_layer.view(new_context_layer_shape)
 
         if self.is_decoder:
