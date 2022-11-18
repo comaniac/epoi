@@ -4,7 +4,6 @@ import torch
 from .base import ModuleInjectPolicy
 from ..utils import get_arg, check_unsupported_arg
 from ...ops.torchscript_ops import FusedBiasGELU, FusedBiasNewGELU
-from ...ops.xformers_attn import GenericSelfAttention
 
 
 def find_dropout_prob(config_or_mod):
@@ -109,6 +108,8 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
     @staticmethod
     def inject_module():
         """The custom module to inject."""
+        from ...ops.xformers_attn import GenericSelfAttention
+
         return GenericSelfAttention
 
     @staticmethod
@@ -124,15 +125,15 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
         New forward signature:
          (hidden_states, attention_mask, layer_past, use_cache)
         """
-        from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
+        from transformers.models.gpt2.modeling_gpt2 import GPT2Attention as HFGPT2Attention
 
-        if isinstance(orig_cls, GPT2Attention):
+        if orig_cls is HFGPT2Attention:
 
             def wrapped_forward(*args, **kwargs):
                 check_unsupported_arg("head_mask", 3, args, kwargs)
                 check_unsupported_arg("encoder_hidden_states", 4, args, kwargs)
                 check_unsupported_arg("encoder_attention_mask", 5, args, kwargs)
-                check_unsupported_arg("output_attentions", 7, args, kwargs, False)
+                check_unsupported_arg("output_attentions", 7, args, kwargs, [None, False])
                 new_args = {
                     "hidden_states": get_arg("hidden_states", 0, args, kwargs),
                     "layer_past": get_arg("layer_past", 1, args, kwargs),
@@ -145,7 +146,7 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
 
             def wrapped_forward(*args, **kwargs):
                 check_unsupported_arg("head_mask", 3, args, kwargs)
-                check_unsupported_arg("output_attentions", 5, args, kwargs, False)
+                check_unsupported_arg("output_attentions", 5, args, kwargs, [None, False])
                 new_args = {
                     "hidden_states": get_arg("hidden_states", 0, args, kwargs),
                     "attention_mask": get_arg("attention_mask", 1, args, kwargs),

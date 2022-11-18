@@ -5,7 +5,6 @@ from torch import nn
 from .base import ModuleInjectPolicy
 from ..utils import get_arg, check_unsupported_arg
 from ...ops.torchscript_ops import FusedDropoutAddLayerNorm
-from ...ops.xformers_attn import GenericSelfAttention
 
 
 class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
@@ -53,6 +52,7 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
     @staticmethod
     def inject_module():
         """The custom module to inject."""
+        from ...ops.xformers_attn import GenericSelfAttention
         return GenericSelfAttention
 
     @staticmethod
@@ -69,7 +69,7 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
             check_unsupported_arg("head_mask", 2, args, kwargs)
             check_unsupported_arg("encoder_hidden_states", 3, args, kwargs)
             check_unsupported_arg("encoder_attention_mask", 4, args, kwargs)
-            check_unsupported_arg("output_attentions", 6, args, kwargs, False)
+            check_unsupported_arg("output_attentions", 6, args, kwargs, [None, False])
             new_args = {
                 "hidden_states": get_arg("hidden_states", 0, args, kwargs),
                 "attention_mask": get_arg("attention_mask", 1, args, kwargs),

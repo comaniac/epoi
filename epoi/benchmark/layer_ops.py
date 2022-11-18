@@ -123,7 +123,7 @@ def bert_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.bert.modeling_bert import BertSelfAttention
-    from ..inject.policy.encoder import InjectHFBertSelfAttentionPolicy
+    from ..inject.policy.bert import InjectHFBertSelfAttentionPolicy
     from ..ops.xformers_attn import check_xformer_op_support
 
     def _init(shape, dtype, attn_op_name, no_dropout=False):
@@ -225,7 +225,7 @@ def gpt_attention(args):
 
     from transformers import AutoConfig
     from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
-    from ..inject.policy.decoder import InjectHFGPTAttentionPolicy
+    from ..inject.policy.gpt import InjectHFGPTAttentionPolicy
 
     def _init(shape, dtype, attn_op_name, no_dropout=False):
         config = AutoConfig.from_pretrained("gpt2-medium")
@@ -365,9 +365,11 @@ def t5_attention(args):
 
     # (batch, seq, hidden size, d_kv, n_head)
     shapes = [
-        (4, 1024, 512, 64, 16),  # t5-small
-        (4, 1024, 1024, 64, 16),  # t5-large
-        (4, 2048, 1024, 64, 16),
+        (1, 1024, 1024, 64, 16),
+        # (1, 512, 1024, 64, 16)
+        # (4, 1024, 512, 64, 16),  # t5-small
+        # (4, 1024, 1024, 64, 16),  # t5-large
+        # (4, 2048, 1024, 64, 16),
     ]
 
     # Encoder, SelfAttention: has_relative_attention_bias=True since the 2nd layer.
@@ -414,7 +416,7 @@ def t5_attention(args):
                 has_relative_attention_bias,
                 no_dropout=True,
             )
-            for name in ["native", "cutlass", "flshatt"]:
+            for name in ["cutlass"]: #"native" , "cutlass", "flshatt"
                 fun_xf = _init(
                     shapes[0],
                     configs[0].dtype,

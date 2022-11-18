@@ -34,7 +34,7 @@ class MemoryMeasurement:
     memory: float
 
     @staticmethod
-    def print(results):
+    def print(results, note=None):
         from tabulate import tabulate
 
         descs = {}  # Use dict to dedup while preserving order.
@@ -53,7 +53,10 @@ class MemoryMeasurement:
             data.append([shape] + [row[desc] if desc in row else "N/A" for desc in headers[1:]])
 
         print(tabulate(data, headers=headers, stralign="center", numalign="center"))
-        print("\nMemory is in MBs and excludes inputs/outputs.\n")
+        print("\nMemory is in MBs and excludes inputs/outputs.")
+        if note:
+            print(note)
+        print()
 
 
 def expand_requires_grad(requires_grad, target_len):
@@ -133,14 +136,26 @@ def skip_if(cond, desc):
     return False
 
 
+def print_live_tensors():
+    gc.collect()
+    tc = 0
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj) or (hasattr(obj, "data") and torch.is_tensor(obj.data)):
+                print("GC Tensor", type(obj), obj.size())
+                tc += obj.numel()
+        except:
+            pass
+
+
 def bench(shapes, configs, label, verbose=False):
     perf_results = []
     memory_results = []
     for shape in shapes:
         for config in configs:
             torch.cuda.synchronize()
-            gc.collect()
             torch.cuda.empty_cache()
+            gc.collect()
             func = config.init_func(shape, config.dtype)
             if skip_if(func is None, f"{config.desc}: Initialization failed with shape {shape}"):
                 continue
@@ -160,13 +175,13 @@ def bench(shapes, configs, label, verbose=False):
                 "grad": None,
             }
             if config.backward:
+                global_dict["_run"] = _forward_backward
+                global_dict["grad"] = gen_grad(func, inputs, config.requires_grad)
                 for inp in inputs:
                     if inp is not None:
                         inp.requires_grad = inp.dtype in (torch.float32, torch.float16)
                 if hasattr(func, "train"):
                     func.train()
-                global_dict["_run"] = _forward_backward
-                global_dict["grad"] = gen_grad(func, inputs, config.requires_grad)
 
                 if skip_if(
                     not test_func(
@@ -183,19 +198,26 @@ def bench(shapes, configs, label, verbose=False):
                 sub_label=str(shape),
                 description=config.desc,
             )
-            # Benchmark. Note that this implies 500/100=5 warmups.
+            # Benchmark memory. Note that we only run forward.
+            torch.cuda.synchronize()
             torch.cuda.empty_cache()
+            gc.collect()
             torch.cuda.reset_peak_memory_stats()
             memory_before = torch.cuda.max_memory_allocated() / 2**20
-            perf_results.append(bencher.timeit(500))
+            _forward_only(func, inputs)
             memory_after = torch.cuda.max_memory_allocated() / 2**20
             memory_results.append(
                 MemoryMeasurement(config.desc, str(shape), memory_after - memory_before)
             )
 
+            # Benchmark latency. Note that this implies 500/100=5 warmups.
+            perf_results.append(bencher.timeit(500))
+
     compare = benchmark.Compare(perf_results)
     compare.print()
-    MemoryMeasurement.print(memory_results)
+    MemoryMeasurement.print(
+        memory_results, "Note that memory is measured with only forward (but with activations)."
+    )
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
     return compare, memory_results
