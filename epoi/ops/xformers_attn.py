@@ -4,7 +4,6 @@ import math
 
 import torch
 import torch.nn as nn
-from pytorch_memlab import profile, profile_every
 
 try:
     import xformers
