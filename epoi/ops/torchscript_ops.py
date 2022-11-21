@@ -4,7 +4,10 @@ from functools import partial
 import math
 import torch
 import torch.nn.functional as F
-from functorch.compile import memory_efficient_fusion
+try:
+    from functorch.compile import memory_efficient_fusion
+except:
+    memory_efficient_fusion = None
 
 
 class BiasGeLUFunction(torch.autograd.Function):
@@ -84,7 +87,7 @@ class FusedBiasNewGELU(torch.nn.Module):
         self.fused = fused
         self.reset_parameters(prev_weight)
         if self.fused:
-            if aot:
+            if aot and memory_efficient_fusion is not None:
                 self.func = memory_efficient_fusion(bias_new_gelu)
             else:
                 self.func = torch.jit.script(bias_new_gelu)
@@ -161,7 +164,7 @@ class FusedDropoutAddLayerNorm(torch.nn.Module):
         self.layer_norm = torch.nn.LayerNorm(size, eps=eps)
         self.dropout_prob = dropout_prob
         self.fused = fused
-        if fused and aot:
+        if fused and aot and memory_efficient_fusion is not None:
             # FIXME: it works fine in benchmark but failed with HF Trainer with
             # RuntimeError: Trying to backward through the graph a second time
             # (or directly access saved tensors after they have already been freed).
