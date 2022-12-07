@@ -94,18 +94,25 @@ def check_xformer_op_support(ref_op_or_name=None):
 class MemoryEfficientAttentionOp(nn.Module):
     """A wrapper module that processes HF attention mask to xformers attention mask."""
 
-    def __init__(self, attn_op_name, is_decoder):
+    def __init__(self, attn_op_name, apply_causal_mask, scale=None):
         super().__init__()
         assert xformers is not None, "xformers is not installed"
         self.attn_op_name = attn_op_name
         self.op = get_attn_op_by_name(attn_op_name)
-        self.is_decoder = is_decoder
-        _, self.xformer_with_ty_bias = check_xformer_op_support(self.op)
+        self.apply_causal_mask = apply_causal_mask
+        self.xformer_with_custom_scale, self.xformer_with_ty_bias = check_xformer_op_support(
+            self.op
+        )
         if self.attn_op_name == "native":
-            self.attn_fn = attention_native
+            self.attn_fn = partial(attention_native, scale=scale, softmax_in_fp32=True)
         else:
             # When op=None, the attention op will be automatically selected.
-            self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
+            if scale is not None and self.xformer_with_custom_scale:
+                self.attn_fn = partial(
+                    xformers.ops.memory_efficient_attention, op=self.op, scale=scale
+                )
+            else:
+                self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
 
     def forward(self, query_layer, key_layer, value_layer, attention_mask, p):
         # Check if the assigned xformer op supports this input case if it is specified.
@@ -120,7 +127,7 @@ class MemoryEfficientAttentionOp(nn.Module):
                     "So the result may be inconsistent with the original module."
                 )
 
-        if self.is_decoder:
+        if self.apply_causal_mask:
             if attention_mask is not None:
                 print_once(
                     f"WARNING: We always apply causal mask for decoder for now. "
@@ -128,7 +135,7 @@ class MemoryEfficientAttentionOp(nn.Module):
                 )
             seq_len = query_layer.shape[1]
             attention_mask = xformers.ops.LowerTriangularMask(
-                [1, seq_len, seq_len], dtype=query_layer.dtype, device="cuda"
+                [1, seq_len, seq_len], dtype=query_layer.dtype, device=query_layer.device
             )
         else:
             if attention_mask is not None and not self.xformer_with_ty_bias:
@@ -342,60 +349,16 @@ class GPT2AttentionWithXF(nn.Module):
         )
 
 
-class T5Attention(nn.Module):
-    """Modified from HuggingFace's T5Attention to use xformers' attention ops"""
-
+class RelativeBias(nn.Module):
     def __init__(
-        self,
-        is_decoder,
-        relative_attention_num_buckets,
-        relative_attention_max_distance,
-        d_model,
-        d_kv,
-        num_heads,
-        dropout_rate,
-        has_relative_attention_bias=False,
-        attn_op_name="auto",
+        self, relative_attention_num_buckets, relative_attention_max_distance, n_heads, is_decoder
     ):
         super().__init__()
-        self.is_decoder = is_decoder
-        self.has_relative_attention_bias = has_relative_attention_bias
         self.relative_attention_num_buckets = relative_attention_num_buckets
         self.relative_attention_max_distance = relative_attention_max_distance
-        self.d_model = d_model
-        self.key_value_proj_dim = d_kv
-        self.n_heads = num_heads
-        self.dropout = dropout_rate
-        self.inner_dim = self.n_heads * self.key_value_proj_dim
-
-        # Mesh TensorFlow initialization to avoid scaling before softmax
-        self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.k = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.v = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.o = nn.Linear(self.inner_dim, self.d_model, bias=False)
-
-        if self.has_relative_attention_bias:
-            self.relative_attention_bias = nn.Embedding(
-                self.relative_attention_num_buckets, self.n_heads
-            )
-        self.gradient_checkpointing = False
-
-        assert xformers is not None, "xformers is not installed"
-        self.attn_op_name = attn_op_name
-        self.op = get_attn_op_by_name(attn_op_name)
-        self.xformer_with_custom_scale, self.xformer_with_ty_bias = check_xformer_op_support(
-            self.op
-        )
-        if attn_op_name == "native":
-            self.attn_fn = partial(attention_native, scale=1.0, softmax_in_fp32=True)
-        else:
-            # When op=None, the attention op will be automatically selected.
-            if self.xformer_with_custom_scale:
-                self.attn_fn = partial(
-                    xformers.ops.memory_efficient_attention, op=self.op, scale=1.0
-                )
-            else:
-                self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
+        self.n_heads = n_heads
+        self.is_decoder = is_decoder
+        self.embeddings = nn.Embedding(self.relative_attention_num_buckets, self.n_heads)
 
     @staticmethod
     def _relative_position_bucket(
@@ -444,10 +407,8 @@ class T5Attention(nn.Module):
         relative_buckets += torch.where(is_small, relative_position, relative_position_if_large)
         return relative_buckets
 
-    def compute_bias(self, query_length, key_length, device=None):
+    def forward(self, query_length, key_length, device):
         """Compute binned relative position bias"""
-        if device is None:
-            device = self.relative_attention_bias.weight.device
         context_position = torch.arange(query_length, dtype=torch.long, device=device)[:, None]
         memory_position = torch.arange(key_length, dtype=torch.long, device=device)[None, :]
         relative_position = memory_position - context_position  # shape (query_length, key_length)
@@ -457,13 +418,78 @@ class T5Attention(nn.Module):
             num_buckets=self.relative_attention_num_buckets,
             max_distance=self.relative_attention_max_distance,
         )
-        values = self.relative_attention_bias(
+        values = self.embeddings(
             relative_position_bucket
         )  # shape (query_length, key_length, num_heads)
         values = values.permute([2, 0, 1]).unsqueeze(
             0
         )  # shape (1, num_heads, query_length, key_length)
         return values
+
+
+class ZeroBiasLike(nn.Module):
+    def __init__(self, n_heads):
+        super().__init__()
+        self.n_heads = n_heads
+        self.gradient_checkpointing = False  # TODO
+
+    def forward(self, query_length, key_length, ref):
+        bias = torch.zeros(
+            (1, self.n_heads, query_length, key_length),
+            device=ref.device,
+            dtype=ref.dtype,
+        )
+        if self.gradient_checkpointing and self.training:
+            bias.requires_grad = True
+        return bias
+
+
+class T5Attention(nn.Module):
+    """Modified from HuggingFace's T5Attention to use xformers' attention ops"""
+
+    def __init__(
+        self,
+        is_decoder,
+        relative_attention_num_buckets,
+        relative_attention_max_distance,
+        d_model,
+        d_kv,
+        num_heads,
+        dropout_rate,
+        has_relative_attention_bias=False,
+        attn_op_name="auto",
+    ):
+        super().__init__()
+        self.is_decoder = is_decoder
+        self.has_relative_attention_bias = has_relative_attention_bias
+        self.relative_attention_num_buckets = relative_attention_num_buckets
+        self.relative_attention_max_distance = relative_attention_max_distance
+        self.d_model = d_model
+        self.key_value_proj_dim = d_kv
+        self.n_heads = num_heads
+        self.dropout = dropout_rate
+        self.inner_dim = self.n_heads * self.key_value_proj_dim
+
+        # Mesh TensorFlow initialization to avoid scaling before softmax
+        self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.k = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.v = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.o = nn.Linear(self.inner_dim, self.d_model, bias=False)
+
+        if self.has_relative_attention_bias:
+            self.relative_attention_bias = RelativeBias(
+                self.relative_attention_num_buckets,
+                self.relative_attention_max_distance,
+                self.n_heads,
+                self.is_decoder,
+            )
+        else:
+            self.zero_bias_like = ZeroBiasLike(self.n_heads)
+        self.gradient_checkpointing = False
+
+        assert xformers is not None, "xformers is not installed"
+        self.attn_op_name = attn_op_name
+        self.attn_op = MemoryEfficientAttentionOp(attn_op_name, False, scale=1.0)
 
     def forward(
         self,
@@ -486,7 +512,7 @@ class T5Attention(nn.Module):
         # Input is (batch_size, seq_length, dim)
         # Mask is (batch_size, key_length) (non-causal) or (batch_size, key_length, key_length)
         # past_key_value[0] is (batch_size, n_heads, q_len - 1, dim_per_head)
-        batch_size, seq_length = hidden_states.shape[:2]
+        seq_length = hidden_states.shape[1]
         real_seq_length = seq_length
 
         if past_key_value is not None:
@@ -499,7 +525,8 @@ class T5Attention(nn.Module):
 
         def shape(states):
             """projection without transpose"""
-            return states.view(batch_size, -1, self.n_heads, self.key_value_proj_dim)
+            new_x_shape = states.size()[:-1] + (self.n_heads, self.key_value_proj_dim)
+            return states.view(new_x_shape)
 
         def unshape(states):
             """reshape"""
@@ -548,16 +575,10 @@ class T5Attention(nn.Module):
 
         if position_bias is None:
             if not self.has_relative_attention_bias:
-                position_bias = torch.zeros(
-                    (1, self.n_heads, real_seq_length, key_length),
-                    device=key_states.device,
-                    dtype=key_states.dtype,
-                )
-                if self.gradient_checkpointing and self.training:
-                    position_bias.requires_grad = True
+                position_bias = self.zero_bias_like(real_seq_length, key_length, hidden_states)
             else:
-                position_bias = self.compute_bias(
-                    real_seq_length, key_length, device=key_states.device
+                position_bias = self.relative_attention_bias(
+                    real_seq_length, key_length, hidden_states.device
                 )
 
             # if key and values are already calculated
@@ -569,15 +590,7 @@ class T5Attention(nn.Module):
                 position_bias = (
                     position_bias + mask
                 )  # (batch_size, n_heads, seq_length, key_length)
-
-                if not self.xformer_with_ty_bias:
-                    print_once(
-                        f"WARNING: Attention op {self.attn_op_name} does not support "
-                        "attention mask. The position bias and mask are ignored"
-                    )
-                    new_mask = None
-                else:
-                    new_mask = position_bias
+                new_mask = position_bias
             else:
                 new_mask = position_bias.repeat(query_states.shape[0], 1, 1, 1)
 
@@ -587,7 +600,7 @@ class T5Attention(nn.Module):
             new_mask = position_bias
         new_mask = new_mask.contiguous()
 
-        attn_output = self.attn_fn(query_states, key_states, value_states, new_mask, p=self.dropout)
+        attn_output = self.attn_op(query_states, key_states, value_states, new_mask, p=self.dropout)
         attn_output = unshape(attn_output)
         attn_output = self.o(attn_output)
 

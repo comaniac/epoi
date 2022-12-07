@@ -59,7 +59,9 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
         this.o.weight = orig.o.weight
         this.o.bias = orig.o.bias
         if hasattr(orig, "relative_attention_bias"):
-            this.relative_attention_bias.weight = orig.relative_attention_bias.weight
+            this.relative_attention_bias.embeddings.weight = (
+                orig.relative_attention_bias.weight
+            )
 
     @staticmethod
     def target_modules():
