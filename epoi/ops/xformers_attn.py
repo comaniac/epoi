@@ -471,10 +471,10 @@ class T5Attention(nn.Module):
         self.inner_dim = self.n_heads * self.key_value_proj_dim
 
         # Mesh TensorFlow initialization to avoid scaling before softmax
-        self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.k = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.v = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.o = nn.Linear(self.inner_dim, self.d_model, bias=False)
+        self.query = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.key = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.value = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.out = nn.Linear(self.inner_dim, self.d_model, bias=False)
 
         if self.has_relative_attention_bias:
             self.relative_attention_bias = RelativeBias(
@@ -556,19 +556,19 @@ class T5Attention(nn.Module):
 
         # get query states
         query_states = shape(
-            self.q(hidden_states)
+            self.query(hidden_states)
         )  # (batch_size, seq_length, n_heads, dim_per_head)
 
         # get key/value states
         key_states = project(
             hidden_states,
-            self.k,
+            self.key,
             key_value_states,
             past_key_value[0] if past_key_value is not None else None,
         )
         value_states = project(
             hidden_states,
-            self.v,
+            self.value,
             key_value_states,
             past_key_value[1] if past_key_value is not None else None,
         )
@@ -602,7 +602,7 @@ class T5Attention(nn.Module):
 
         attn_output = self.attn_op(query_states, key_states, value_states, new_mask, p=self.dropout)
         attn_output = unshape(attn_output)
-        attn_output = self.o(attn_output)
+        attn_output = self.out(attn_output)
 
         present_key_value_state = (
             (key_states, value_states) if (self.is_decoder and use_cache) else None
