@@ -65,7 +65,7 @@ def get_attn_op_by_name(attn_name):
     if attn_name is None or attn_name == "native" or attn_name == "auto":
         return None
     for op in ops:
-        if attn_name == op.NAME:
+        if f"{attn_name}F" == op[0].NAME:
             return op
     raise ValueError(f"Unknown attention op name: {attn_name}")
 
@@ -86,7 +86,8 @@ def check_xformer_op_support(ref_op_or_name=None):
     if ref_op is None:
         return True, True
 
-    custom_scale = hasattr(ref_op, "SUPPORTS_CUSTOM_SCALE") and ref_op.SUPPORTS_CUSTOM_SCALE
+    ref_op = ref_op[0] # Only check the forward op.
+    custom_scale = ref_op.SUPPORTS_CUSTOM_SCALE
     ty_bias = torch.Tensor in ref_op.SUPPORTED_ATTN_BIAS_TYPES
     return custom_scale, ty_bias
 
@@ -115,18 +116,6 @@ class MemoryEfficientAttentionOp(nn.Module):
                 self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
 
     def forward(self, query_layer, key_layer, value_layer, attention_mask, p):
-        # Check if the assigned xformer op supports this input case if it is specified.
-        if self.op is not None:
-            dispatch = xformers.ops.AttentionOpDispatch.from_arguments(
-                query_layer, key_layer, value_layer, attention_mask, p=p
-            )
-            if not self.op.supports(dispatch):
-                print_once(
-                    f"WARNING: The specified attention op {self.attn_op_name} does not support "
-                    f"this input config (usually dropout and attention bias/mask type): {dispatch} "
-                    "So the result may be inconsistent with the original module."
-                )
-
         if self.apply_causal_mask:
             if attention_mask is not None:
                 print_once(
@@ -140,7 +129,7 @@ class MemoryEfficientAttentionOp(nn.Module):
         else:
             if attention_mask is not None and not self.xformer_with_ty_bias:
                 print_once(
-                    f"WARNING: Attention op {self.op} does not support "
+                    f"WARNING: Attention op {self.op[0]} does not support "
                     "attention mask. The mask will be ignored"
                 )
                 attention_mask = None

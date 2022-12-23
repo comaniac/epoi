@@ -45,19 +45,19 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
         # "unscale" them here if the kernel does not support custom scale value.
         if not custom_scale:
             scale = orig.key_value_proj_dim**0.5
-            this.q.weight = torch.nn.Parameter(
+            this.query.weight = torch.nn.Parameter(
                 orig.q.weight * scale,
                 requires_grad=orig.q.weight.requires_grad,
             )
         else:
-            this.q.weight = orig.q.weight
-        this.q.bias = orig.q.bias
-        this.k.weight = orig.k.weight
-        this.k.bias = orig.k.bias
-        this.v.weight = orig.v.weight
-        this.v.bias = orig.v.bias
-        this.o.weight = orig.o.weight
-        this.o.bias = orig.o.bias
+            this.query.weight = orig.q.weight
+        this.query.bias = orig.q.bias
+        this.key.weight = orig.k.weight
+        this.key.bias = orig.k.bias
+        this.value.weight = orig.v.weight
+        this.value.bias = orig.v.bias
+        this.out.weight = orig.o.weight
+        this.out.bias = orig.o.bias
         if hasattr(orig, "relative_attention_bias"):
             this.relative_attention_bias.embeddings.weight = (
                 orig.relative_attention_bias.weight
