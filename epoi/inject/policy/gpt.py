@@ -17,6 +17,8 @@ def find_dropout_prob(config_or_mod):
         attn_pdrop = config_or_mod.attn_pdrop
     elif hasattr(config_or_mod, "attn_dropout"):
         attn_pdrop = config_or_mod.attn_dropout
+    elif hasattr(config_or_mod, "dropout"):
+        attn_pdrop = config_or_mod.dropout
     else:
         raise ValueError("Cannot find attention dropout probability")
 
@@ -26,6 +28,8 @@ def find_dropout_prob(config_or_mod):
         resid_pdrop = config_or_mod.resid_dropout
     elif hasattr(config_or_mod, "resid_dropout"):
         resid_pdrop = config_or_mod.resid_dropout
+    elif hasattr(config_or_mod, "dropout"):
+        resid_pdrop = config_or_mod.dropout
     else:
         raise ValueError("Cannot find resid_pdrop or resid_dropout in config.")
 

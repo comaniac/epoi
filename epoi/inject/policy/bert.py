@@ -14,7 +14,7 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
             "hidden_size": orig.all_head_size,
             "num_attention_heads": orig.num_attention_heads,
             "is_decoder": False,
-            "attn_pdrop": orig.dropout.p,
+            "attn_pdrop": orig.attention_dropout.p if hasattr(orig, "attention_dropout") else orig.dropout.p,
             "resid_pdrop": 0,
             "attn_op_name": kwargs.get("attn_op_name", "cutlass"),
         }
