@@ -189,11 +189,11 @@ class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
         # Fetch the intermediate size from weight shape.
         if isinstance(orig, GPT2MLP):
             # GPT2 uses legacy Conv1D with transposed weights.
-            args["intermediate_size"], args["hidden_size"] = orig.c_fc.weight.shape
-        elif isinstance(orig, GPTNeoMLP):
             args["hidden_size"], args["intermediate_size"] = orig.c_fc.weight.shape
+        elif isinstance(orig, GPTNeoMLP):
+            args["intermediate_size"], args["hidden_size"] = orig.c_fc.weight.shape
         elif isinstance(orig, GPTJMLP):
-            args["hidden_size"], args["intermediate_size"] = orig.fc_in.weight.shape
+            args["intermediate_size"], args["hidden_size"] = orig.fc_in.weight.shape
 
         return args
 
