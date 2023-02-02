@@ -1,8 +1,7 @@
 """T5 specific injection policies."""
-import torch
 
 from .base import ModuleInjectPolicy
-from ...ops.xformers_attn import T5Attention, check_xformer_op_support
+from ...ops.xformers_attn import T5Attention
 
 
 class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
@@ -39,18 +38,7 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def assign_params(this, orig, **kwargs):
-        attn_op_name = kwargs.get("attn_op_name", "cutlass")
-        custom_scale, _ = check_xformer_op_support(attn_op_name)
-        # xFormers' kernel scales weights by default, so we may need to
-        # "unscale" them here if the kernel does not support custom scale value.
-        if not custom_scale:
-            scale = orig.key_value_proj_dim**0.5
-            this.query.weight = torch.nn.Parameter(
-                orig.q.weight * scale,
-                requires_grad=orig.q.weight.requires_grad,
-            )
-        else:
-            this.query.weight = orig.q.weight
+        this.query.weight = orig.q.weight
         this.query.bias = orig.q.bias
         this.key.weight = orig.k.weight
         this.key.bias = orig.k.bias

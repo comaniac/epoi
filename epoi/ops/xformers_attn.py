@@ -7,7 +7,7 @@ import torch.nn as nn
 
 try:
     import xformers
-    import xformers.ops
+    from xformers import ops as xformers_ops
 except ImportError:
     xformers = None
 
@@ -20,36 +20,43 @@ def print_once(msg):
         ATTN_GLOBAL_MSGS.add(msg)
 
 
-def attention_native(q, k, v, attn_bias, p=0.0, scale=None, softmax_in_fp32=False):
+def attention_native(q, k, v, attn_bias, p=0.0, scale=None):
     """The native PyTorch implementation of attention with the same signature as the
     FlashAttention implemented in xformers. This is used mainly to check the correctness
     of the xformers implementation, so do not change the functionality of this function.
     """
     assert xformers is not None, "xformers is not installed"
+    assert q.ndim == 4
 
     def attention_bmk(q, k, v, attn_bias=None, p=0.0, scale=None):
-        if isinstance(attn_bias, xformers.ops.AttentionMask):
-            attn_bias = attn_bias.to_tensor().to(q.dtype)
-        scale = scale if scale is not None else (1.0 / q.shape[-1] ** 0.5)
+        assert q.ndim == 3
+        q = q.float()
+        k = k.float()
+        v = v.float()
+
+        scale = scale if scale is not None else (1 / q.shape[-1] ** 0.5)
         q = q * scale
-        if attn_bias is None:
-            attn = q @ k.transpose(-2, -1)
-        else:
-            # equivalent to (q @ k.transpose(-2, -1) + m)
-            # but faster, and is what is used in PyTorch now
-            attn = torch.baddbmm(attn_bias, q, k.transpose(-2, -1))
-        if softmax_in_fp32:
-            attn = attn.float()
+
+        attn = q @ k.transpose(-2, -1)
+        if attn_bias is not None:
+            if attn_bias.ndim == 4:
+                assert q.shape[0] == attn_bias.shape[0] * attn_bias.shape[1]
+                attn_bias = attn_bias.reshape([-1, *attn_bias.shape[2:]])
+            attn = attn + attn_bias.float()
         attn = attn.softmax(-1).to(q.dtype)
         if p > 0:
             attn = torch.nn.functional.dropout(attn, p=p)
         return attn @ v
 
-    assert q.ndim == 4
-
     def T(t):
         return t.permute((0, 2, 1, 3)).reshape([t.shape[0] * t.shape[2], t.shape[1], t.shape[3]])
 
+    if isinstance(attn_bias, xformers.ops.AttentionBias):
+        attn_bias = attn_bias.materialize(
+            (q.shape[0], q.shape[2], q.shape[1], k.shape[1]),
+            device=q.device,
+            dtype=q.dtype,
+        ).reshape([q.shape[0] * q.shape[2], q.shape[1], k.shape[1]])
     out = attention_bmk(T(q), T(k), T(v), attn_bias, p, scale=scale)
     out = out.reshape([q.shape[0], q.shape[2], q.shape[1], v.shape[3]])
     return out.permute((0, 2, 1, 3))
@@ -57,10 +64,10 @@ def attention_native(q, k, v, attn_bias, p=0.0, scale=None, softmax_in_fp32=Fals
 
 def get_attn_op_by_name(attn_name):
     ops = [
-        xformers.ops.MemoryEfficientAttentionOp,
-        xformers.ops.MemoryEfficientAttentionCutlassOp,
-        xformers.ops.MemoryEfficientAttentionFlashAttentionOp,
-        xformers.ops.MemoryEfficientAttentionCutlassFwdFlashBwOp,
+        (xformers_ops.fmha.cutlass.FwOp, xformers_ops.fmha.cutlass.BwOp),
+        (xformers_ops.fmha.flash.FwOp, xformers_ops.fmha.flash.BwOp),
+        (xformers_ops.fmha.triton.FwOp, xformers_ops.fmha.triton.BwOp),
+        (xformers_ops.fmha.small_k.FwOp, xformers_ops.fmha.small_k.BwOp),
     ]
     if attn_name is None or attn_name == "native" or attn_name == "auto":
         return None
@@ -68,28 +75,6 @@ def get_attn_op_by_name(attn_name):
         if f"{attn_name}F" == op[0].NAME:
             return op
     raise ValueError(f"Unknown attention op name: {attn_name}")
-
-
-def check_xformer_op_support(ref_op_or_name=None):
-    """We require two latest xFoeamers op support:
-    1) custom softmax scale.
-    2) tensor type attention mask.
-    These features are not available in upstream simultaneously, so we need to
-    know which one is available in this environment.
-    """
-    if xformers is None:
-        return False, False
-    ref_op = (
-        get_attn_op_by_name(ref_op_or_name) if isinstance(ref_op_or_name, str) else ref_op_or_name
-    )
-
-    if ref_op is None:
-        return True, True
-
-    ref_op = ref_op[0] # Only check the forward op.
-    custom_scale = ref_op.SUPPORTS_CUSTOM_SCALE
-    ty_bias = torch.Tensor in ref_op.SUPPORTED_ATTN_BIAS_TYPES
-    return custom_scale, ty_bias
 
 
 class MemoryEfficientAttentionOp(nn.Module):
@@ -101,40 +86,24 @@ class MemoryEfficientAttentionOp(nn.Module):
         self.attn_op_name = attn_op_name
         self.op = get_attn_op_by_name(attn_op_name)
         self.apply_causal_mask = apply_causal_mask
-        self.xformer_with_custom_scale, self.xformer_with_ty_bias = check_xformer_op_support(
-            self.op
-        )
+
         if self.attn_op_name == "native":
-            self.attn_fn = partial(attention_native, scale=scale, softmax_in_fp32=True)
+            self.attn_fn = partial(attention_native, scale=scale)
         else:
             # When op=None, the attention op will be automatically selected.
-            if scale is not None and self.xformer_with_custom_scale:
-                self.attn_fn = partial(
-                    xformers.ops.memory_efficient_attention, op=self.op, scale=scale
-                )
-            else:
-                self.attn_fn = partial(xformers.ops.memory_efficient_attention, op=self.op)
+            self.attn_fn = partial(xformers_ops.memory_efficient_attention, op=self.op, scale=scale)
 
     def forward(self, query_layer, key_layer, value_layer, attention_mask, p):
         if self.apply_causal_mask:
+            attn_bias = xformers_ops.fmha.attn_bias.LowerTriangularMask()
             if attention_mask is not None:
-                print_once(
-                    f"WARNING: We always apply causal mask for decoder for now. "
-                    "The given attention mask will be ignored"
-                )
-            seq_len = query_layer.shape[1]
-            attention_mask = xformers.ops.LowerTriangularMask(
-                [1, seq_len, seq_len], dtype=query_layer.dtype, device=query_layer.device
-            )
+                attn_bias = attn_bias.add_bias(attention_mask)
         else:
-            if attention_mask is not None and not self.xformer_with_ty_bias:
-                print_once(
-                    f"WARNING: Attention op {self.op[0]} does not support "
-                    "attention mask. The mask will be ignored"
-                )
-                attention_mask = None
+            attn_bias = attention_mask
 
-        return self.attn_fn(query_layer, key_layer, value_layer, attention_mask, p=p)
+        ret = self.attn_fn(query_layer, key_layer, value_layer, attn_bias, p=p)
+        ret = ret.to(query_layer.dtype)
+        return ret
 
 
 class GenericSelfAttention(nn.Module):
@@ -188,8 +157,6 @@ class GenericSelfAttention(nn.Module):
     def layout_attention_mask(mask, num_attention_heads):
         # (B, 1, 1, S) -> (B, H, S, S)
         mask = mask.repeat(1, num_attention_heads, mask.shape[-1], 1)
-        # (B, H, S, S) -> (B x H, S, S)
-        mask = mask.reshape((-1), mask.shape[-2], mask.shape[-1])
         return mask.contiguous()
 
     def reshape_for_scores(self, x: torch.Tensor) -> torch.Tensor:
@@ -582,9 +549,6 @@ class T5Attention(nn.Module):
                 new_mask = position_bias
             else:
                 new_mask = position_bias.repeat(query_states.shape[0], 1, 1, 1)
-
-            if isinstance(new_mask, torch.Tensor):
-                new_mask = new_mask.reshape((-1,) + new_mask.shape[2:])
         else:
             new_mask = position_bias
         new_mask = new_mask.contiguous()

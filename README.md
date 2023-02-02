@@ -12,7 +12,7 @@ it's fine if you just want to benchmark the operators from certain libraries.
 - HuggingFace transformers (https://github.com/huggingface/transformers): Any installation works.
 - NVIDIA Apex (https://github.com/NVIDIA/apex): Clone and use setup.py to build from source.
 - Megatron-LM (https://github.com/NVIDIA/Megatron-LM): Clone and add the path to PYTHONPATH.
-- xFormers (https://github.com/facebookresearch/xformers): Clone and use setup.py to build from source.
+- xFormers (https://github.com/facebookresearch/xformers): Clone and use setup.py to build from source. Verified commit: 48a77cc
 
 ## Inventory
 

@@ -124,7 +124,6 @@ def bert_attention(args):
     from transformers import AutoConfig
     from transformers.models.bert.modeling_bert import BertSelfAttention
     from ..inject.policy.bert import InjectHFBertSelfAttentionPolicy
-    from ..ops.xformers_attn import check_xformer_op_support
 
     def _init(shape, dtype, attn_op_name, no_dropout=False):
         config = AutoConfig.from_pretrained("bert-large-uncased")
@@ -142,14 +141,11 @@ def bert_attention(args):
             attn = attn.half()
         return attn.cuda()
 
-    def gen_inputs(shape, dtype, ty_bias):
+    def gen_inputs(shape, dtype):
         # (batch, seq, hidden size)
         inp_shape = shape[:3]
         hidden_states = torch.randn(*inp_shape, dtype=dtype, device="cuda")
-        if ty_bias:
-            attn_mask = torch.randn(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
-        else:
-            attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
+        attn_mask = torch.randn(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
         return [hidden_states, attn_mask]
 
     def zero_grad(mod, inputs):
@@ -174,7 +170,7 @@ def bert_attention(args):
             torch.float16,
             "HF",
             not args.forward_only,
-            gen_inputs=partial(gen_inputs, ty_bias=True),
+            gen_inputs=gen_inputs,
             zero_grad=zero_grad,
         )
     ]
@@ -184,14 +180,13 @@ def bert_attention(args):
     for fun_xf_name in ["native", "cutlass", "flshatt"]:
         fun_xf = _init(shapes[0], configs[0].dtype, fun_xf_name, no_dropout=True)
         InjectHFBertSelfAttentionPolicy.assign_params(fun_xf, fun_attn)
-        _, ty_bias = check_xformer_op_support(fun_xf_name)
         config = BenchConfig(
             # FIXME: dropout is not supported in xFormer kernels yet.
             partial(_init, attn_op_name=fun_xf_name, no_dropout=True),
             torch.float16,
             f"xFormers {fun_xf_name}",
             not args.forward_only,
-            gen_inputs=partial(gen_inputs, ty_bias=ty_bias),
+            gen_inputs=gen_inputs,
             zero_grad=zero_grad,
         )
         correct = check_correctness(
@@ -260,8 +255,8 @@ def gpt_attention(args):
     # (batch, seq, hidden size, #head, vocab size)
     shapes = [
         (8, 1024, 1024, 16, 50257),  # gpt2-medium
-        (16, 512, 8192, 64, 50264),
-        (4, 2048, 8192, 64, 50264),
+        # (16, 512, 8192, 64, 50264),
+        # (4, 2048, 8192, 64, 50264),
     ]
     configs = [
         BenchConfig(
@@ -320,7 +315,6 @@ def t5_attention(args):
     from transformers import AutoConfig
     from transformers.models.t5.modeling_t5 import T5Attention
     from ..inject.policy.t5 import InjectHFT5AttentionPolicy
-    from ..ops.xformers_attn import check_xformer_op_support
 
     def _init(
         shape, dtype, attn_op_name, is_decoder, has_relative_attention_bias, no_dropout=False
@@ -341,14 +335,11 @@ def t5_attention(args):
             attn = attn.half()
         return attn.cuda()
 
-    def gen_inputs(shape, dtype, cross_attn=True, ty_bias=True):
+    def gen_inputs(shape, dtype, cross_attn=True):
         # (batch, seq, hidden size)
         inp_shape = shape[:3]
         hidden_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
-        if ty_bias:
-            attn_mask = torch.randn(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
-        else:
-            attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
+        attn_mask = torch.randn(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
         if cross_attn:
             kv_states = torch.randn(inp_shape, dtype=dtype, device="cuda")
         else:
@@ -402,7 +393,7 @@ def t5_attention(args):
                     torch.float16,
                     "HF (Attn)",
                     not args.forward_only,
-                    gen_inputs=partial(gen_inputs, cross_attn=cross_attn, ty_bias=True),
+                    gen_inputs=partial(gen_inputs, cross_attn=cross_attn),
                     zero_grad=zero_grad,
                 ),
             ]
@@ -426,10 +417,6 @@ def t5_attention(args):
                     no_dropout=True,
                 )
                 InjectHFT5AttentionPolicy.assign_params(fun_xf, fun_attn, attn_op_name=name)
-                _, ty_bias = check_xformer_op_support(name)
-                if not ty_bias and has_relative_attention_bias:
-                    # relative_attention_bias requires tensor type bias support.
-                    continue
 
                 config = BenchConfig(
                     partial(
@@ -442,7 +429,7 @@ def t5_attention(args):
                     torch.float16,
                     f"xFormers {name}",
                     not args.forward_only,
-                    gen_inputs=partial(gen_inputs, cross_attn=cross_attn, ty_bias=ty_bias),
+                    gen_inputs=partial(gen_inputs, cross_attn=cross_attn),
                     zero_grad=zero_grad,
                 )
                 correct = check_correctness(
