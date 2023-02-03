@@ -38,7 +38,7 @@ def setup():
         description="EPOI: Efficient PyTorch Operator Inventory.",
         version=version,
         setup_requires=[],
-        install_requires=["tabulate", "triton==2.0.0.dev20220323"],
+        install_requires=["tabulate", "triton==2.0.0.dev20221202"],
         packages=setuptools.find_packages(),
         url="https://github.com/comaniac/epoi",
         python_requires=">=3.7",
