@@ -2,6 +2,7 @@
 https://github.com/jfc4050/flash-attention/commit/f52868287ca9bd3ac1598dad6ce818358c1beafc
 """
 from typing import Optional, Tuple
+from functools import partial
 import math
 
 import torch
@@ -17,17 +18,24 @@ try:
 except ImportError:
     rearrange = None
 
+ATTN_GLOBAL_MSGS = set()
+
+def print_once(msg):
+    if msg not in ATTN_GLOBAL_MSGS:
+        print(msg, flush=True)
+        ATTN_GLOBAL_MSGS.add(msg)
 
 def flash_attn_triton_ref(
     q,
     k,
     v,
+    bias=None,
+    causal=False,
+    dropout_p=0.0,
+    softmax_scale=None,
     query_padding_mask=None,
     key_padding_mask=None,
-    dropout_p=0.0,
     dropout_mask=None,
-    causal=False,
-    bias=None,
     upcast=True,
     reorder_ops=False,
 ):
@@ -50,6 +58,7 @@ def flash_attn_triton_ref(
         output: (batch_size, seqlen_q, nheads, head_dim)
         attention: (batch_size, nheads, seqlen_q, seqlen_k), softmax after dropout
     """
+    assert softmax_scale is None, "softmax_scale is not supported"
     assert rearrange is not None, "einops is not installed"
 
     dtype_og = q.dtype
@@ -88,11 +97,19 @@ def flash_attn_triton_ref(
 class FlashAttentionTritonOp(nn.Module):
     """A wrapper module that processes HF attention mask to flash attention mask."""
 
-    def __init__(self, attn_op_name, apply_causal_mask):
+    def __init__(self, attn_op_name, apply_causal_mask, scale=None):
         super().__init__()
         self.apply_causal_mask = apply_causal_mask
+        self.scale = scale
         if attn_op_name == "native":
-            self.attn_fn = flash_attn_triton_ref
+            self.attn_fn = partial(
+                flash_attn_triton_ref,
+                query_padding_mask=None,
+                key_padding_mask=None,
+                dropout_mask=None,
+                upcast=True,
+                reorder_ops=False
+            )
         elif attn_op_name == "triton":
             if flash_attn_triton_func is None:
                 raise RuntimeError("flash_attn is not installed")
@@ -101,19 +118,19 @@ class FlashAttentionTritonOp(nn.Module):
             raise ValueError(f"Invalid attn_op_name: {attn_op_name}")
 
     def forward(self, query_layer, key_layer, value_layer, attention_mask, p):
+        if attention_mask is not None:
+            print_once(
+                "WARNING: bias gradient is not supported yet. The given mask will be ignored"
+            )
         ret = self.attn_fn(
             query_layer,
             key_layer,
             value_layer,
-            query_padding_mask=None,
-            key_padding_mask=None,
-            dropout_p=p,
-            dropout_mask=None,
-            causal=self.apply_causal_mask,
-            bias=attention_mask,
-            upcast=True,
-            reorder_ops=False,
-        )[0]
+            None, # bias
+            self.apply_causal_mask, # causal
+            p, # dropout_p
+            self.scale, # softmax_scale
+        )
         ret = ret.to(query_layer.dtype)
         return ret
 

@@ -254,9 +254,9 @@ def gpt_attention(args):
 
     # (batch, seq, hidden size, #head, vocab size)
     shapes = [
-        (8, 1024, 1024, 16, 50257),  # gpt2-medium
-        # (16, 512, 8192, 64, 50264),
-        # (4, 2048, 8192, 64, 50264),
+        # (8, 1024, 1024, 16, 50257),  # gpt2-medium
+        # (8, 512, 8192, 64, 50264),
+        (4, 1024, 2048, 16, 50264),
     ]
     configs = [
         BenchConfig(
