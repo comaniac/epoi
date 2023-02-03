@@ -110,10 +110,14 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
         ]
 
     @staticmethod
-    def inject_module():
+    def inject_module(**kwargs):
         """The custom module to inject."""
+        attn_op_name = kwargs.get("attn_op_name", "cutlass")
         from ...ops.xformers_attn import GenericSelfAttention
+        from ...ops.flash_attention import FlashSelfAttention
 
+        if attn_op_name == "triton":
+            return FlashSelfAttention
         return GenericSelfAttention
 
     @staticmethod
@@ -242,7 +246,7 @@ class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
         ]
 
     @staticmethod
-    def inject_module():
+    def inject_module(**kwargs):
         """The custom module to inject."""
 
         class FusedMLP(torch.nn.Module):

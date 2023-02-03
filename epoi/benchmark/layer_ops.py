@@ -242,8 +242,8 @@ def gpt_attention(args):
         # (batch, seq, hidden size * 3)
         inp_shape = shape[:3]
         hidden_states = torch.randn([*inp_shape[:2], inp_shape[2]], dtype=dtype, device="cuda")
-        # attn_mask = torch.zeros(inp_shape[0], 1, 1, inp_shape[1], dtype=dtype, device="cuda")
-        return [hidden_states, None, None]  # (hidden_states, layer_past, attn_mask)
+        attn_mask = torch.randn([inp_shape[0], 1, 1, inp_shape[1]], dtype=dtype, device="cuda")
+        return [hidden_states, None, attn_mask]  # (hidden_states, layer_past, attn_mask)
 
     def zero_grad(mod, inputs):
         inputs[0].grad = None
@@ -272,13 +272,13 @@ def gpt_attention(args):
 
     # Check correctness. Note that vanilla FashAttention does not support casual mask.
     fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
-    for name in ["native", "cutlass", "flshatt"]:
+    for name in ["native", "triton", "cutlass", "flshatt"]:
         fun_xf = _init(shapes[0], configs[0].dtype, name, no_dropout=True)
         InjectHFGPTAttentionPolicy.assign_params(fun_xf, fun_attn)
         config = BenchConfig(
             partial(_init, attn_op_name=name),
             torch.float16,
-            f"xFormers {name}",
+            name,
             not args.forward_only,
             gen_inputs=gen_inputs,
             zero_grad=zero_grad,
@@ -288,7 +288,7 @@ def gpt_attention(args):
             fun_attn,
             fun_xf,
             config,
-            desc=f"xFormers ({name})",
+            desc=name,
             verbose=args.verbose,
         )
         if correct is not None:

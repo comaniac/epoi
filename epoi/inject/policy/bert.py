@@ -50,7 +50,7 @@ class InjectHFBertSelfAttentionPolicy(ModuleInjectPolicy):
         return [(transformers.models.bert.modeling_bert, "BertSelfAttention")]
 
     @staticmethod
-    def inject_module():
+    def inject_module(**kwargs):
         """The custom module to inject."""
         from ...ops.xformers_attn import GenericSelfAttention
         return GenericSelfAttention
@@ -119,7 +119,7 @@ class InjectHFBertOutputPolicy(ModuleInjectPolicy):
         return [(transformers.models.bert.modeling_bert, "BertOutput")]
 
     @staticmethod
-    def inject_module():
+    def inject_module(**kwargs):
         """The custom module to inject."""
 
         class FusedBertOutput(nn.Module):

@@ -59,6 +59,6 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
         return [(transformers.models.t5.modeling_t5, "T5Attention")]
 
     @staticmethod
-    def inject_module():
+    def inject_module(**kwargs):
         """The custom module to inject."""
         return T5Attention
