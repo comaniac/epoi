@@ -99,6 +99,7 @@ class FlashAttentionTritonOp(nn.Module):
 
     def __init__(self, attn_op_name, apply_causal_mask, scale=None):
         super().__init__()
+        self.attn_op_name = attn_op_name
         self.apply_causal_mask = apply_causal_mask
         self.scale = scale
         if attn_op_name == "native":
