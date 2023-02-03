@@ -69,7 +69,7 @@ def get_attn_op_by_name(attn_name):
         (xformers_ops.fmha.triton.FwOp, xformers_ops.fmha.triton.BwOp),
         (xformers_ops.fmha.small_k.FwOp, xformers_ops.fmha.small_k.BwOp),
     ]
-    if attn_name is None or attn_name == "native" or attn_name == "auto":
+    if attn_name is None or attn_name in {"native", "auto"}:
         return None
     for op in ops:
         if f"{attn_name}F" == op[0].NAME:
@@ -84,13 +84,13 @@ class MemoryEfficientAttentionOp(nn.Module):
         super().__init__()
         assert xformers is not None, "xformers is not installed"
         self.attn_op_name = attn_op_name
-        self.op = get_attn_op_by_name(attn_op_name)
         self.apply_causal_mask = apply_causal_mask
 
         if self.attn_op_name == "native":
             self.attn_fn = partial(attention_native, scale=scale)
         else:
             # When op=None, the attention op will be automatically selected.
+            self.op = get_attn_op_by_name(attn_op_name)
             self.attn_fn = partial(xformers_ops.memory_efficient_attention, op=self.op, scale=scale)
 
     def forward(self, query_layer, key_layer, value_layer, attention_mask, p):
@@ -190,7 +190,7 @@ class GenericSelfAttention(nn.Module):
             value_layer = torch.cat((past_value, value_layer), dim=-2)
 
         if attention_mask is not None:
-            # Required attention mask shape: [batch_size x #heads, seq_length, seq_length].
+            # Required attention mask shape: [batch_size, #heads, seq_length, seq_length].
             # The input shape is [batch_size, 1, 1, seq_length].
             # In other words, we need to broadcast other dimensions manually.
             attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)

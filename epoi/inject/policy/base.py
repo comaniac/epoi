@@ -9,7 +9,7 @@ class ModuleInjectPolicy:
     def init_from_object(cls, orig, **kwargs):
         """Initialize an instance from a created object."""
         args = cls.gen_init_config_from_object(orig, **kwargs)
-        ret = cls.inject_module()(**args)
+        ret = cls.inject_module(**kwargs)(**args)
         cls.assign_params(ret, orig, **kwargs)
         cls.wrap_forward(cls, orig.__class__, ret)
         return ret
@@ -79,7 +79,7 @@ class ModuleInjectPolicy:
             del self.backup[(target_module, target_cls)]
 
     @staticmethod
-    def inject_module():
+    def inject_module(**kwargs):
         """The custom module to inject."""
         raise NotImplementedError()
 
