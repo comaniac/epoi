@@ -156,7 +156,8 @@ class GenericSelfAttention(nn.Module):
     @staticmethod
     def layout_attention_mask(mask, num_attention_heads):
         # (B, 1, 1, S) -> (B, H, S, S)
-        mask = mask.repeat(1, num_attention_heads, mask.shape[-1], 1)
+        # Note that we use expand instead of repeat to avoid actual memory copy.
+        mask = mask.expand(-1, num_attention_heads, mask.shape[-1], -1)
         return mask.contiguous()
 
     def reshape_for_scores(self, x: torch.Tensor) -> torch.Tensor:

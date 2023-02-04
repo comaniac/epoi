@@ -242,7 +242,9 @@ def gpt_attention(args):
         # (batch, seq, hidden size * 3)
         inp_shape = shape[:3]
         hidden_states = torch.randn([*inp_shape[:2], inp_shape[2]], dtype=dtype, device="cuda")
-        attn_mask = torch.randn([inp_shape[0], 1, 1, inp_shape[1]], dtype=dtype, device="cuda")
+        # attn_mask = torch.randn([inp_shape[0], 1, 1, inp_shape[1]], dtype=dtype, device="cuda")
+        # FIXME: Enable attn_mask when triton supports it.
+        attn_mask = None
         return [hidden_states, None, attn_mask]  # (hidden_states, layer_past, attn_mask)
 
     def zero_grad(mod, inputs):

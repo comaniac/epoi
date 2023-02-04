@@ -20,10 +20,12 @@ except ImportError:
 
 ATTN_GLOBAL_MSGS = set()
 
+
 def print_once(msg):
     if msg not in ATTN_GLOBAL_MSGS:
         print(msg, flush=True)
         ATTN_GLOBAL_MSGS.add(msg)
+
 
 def flash_attn_triton_ref(
     q,
@@ -91,7 +93,7 @@ def flash_attn_triton_ref(
     if query_padding_mask is not None:
         output.masked_fill_(rearrange(~query_padding_mask, "b s -> b s 1 1"), 0.0)
         attention = attention.masked_fill(rearrange(~query_padding_mask, "b s -> b 1 s 1"), 0.0)
-    return output.to(dtype=dtype_og), attention.to(dtype=dtype_og)
+    return output.to(dtype=dtype_og)
 
 
 class FlashAttentionTritonOp(nn.Module):
@@ -109,7 +111,7 @@ class FlashAttentionTritonOp(nn.Module):
                 key_padding_mask=None,
                 dropout_mask=None,
                 upcast=True,
-                reorder_ops=False
+                reorder_ops=False,
             )
         elif attn_op_name == "triton":
             if flash_attn_triton_func is None:
@@ -127,10 +129,10 @@ class FlashAttentionTritonOp(nn.Module):
             query_layer,
             key_layer,
             value_layer,
-            None, # bias
-            self.apply_causal_mask, # causal
-            p, # dropout_p
-            self.scale, # softmax_scale
+            None,  # bias
+            self.apply_causal_mask,  # causal
+            p,  # dropout_p
+            self.scale,  # softmax_scale
         )
         ret = ret.to(query_layer.dtype)
         return ret
@@ -183,12 +185,6 @@ class FlashSelfAttention(nn.Module):
 
         self.attn_op = FlashAttentionTritonOp(attn_op_name, self.is_decoder)
 
-    @staticmethod
-    def layout_attention_mask(mask, num_attention_heads):
-        # (B, 1, 1, S) -> (B, H, S, S)
-        mask = mask.repeat(1, num_attention_heads, mask.shape[-1], 1)
-        return mask.contiguous()
-
     def reshape_for_scores(self, x: torch.Tensor) -> torch.Tensor:
         """Copy from transpose_for_scores but without the transpose"""
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
@@ -218,12 +214,6 @@ class FlashSelfAttention(nn.Module):
             past_key, past_value = layer_past
             key_layer = torch.cat((past_key, key_layer), dim=-2)
             value_layer = torch.cat((past_value, value_layer), dim=-2)
-
-        if attention_mask is not None:
-            # Required attention mask shape: [batch_size, #heads, seq_length, seq_length].
-            # The input shape is [batch_size, 1, 1, seq_length].
-            # In other words, we need to broadcast other dimensions manually.
-            attention_mask = self.layout_attention_mask(attention_mask, self.num_attention_heads)
 
         context_layer = self.attn_op(
             query_layer.contiguous(),
