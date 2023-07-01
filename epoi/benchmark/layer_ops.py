@@ -308,6 +308,103 @@ def gpt_attention(args):
     )
 
 
+def bloom_attention(args):
+    torch.manual_seed(42)
+    if not is_available("transformers") or not is_available("xformers"):
+        logger.warning("Skip attention because transformers or xformers is not available")
+        return
+
+    from transformers import AutoConfig
+    from transformers.models.bloom.modeling_bloom import BloomAttention
+    from ..inject.policy.bloom import InjectHFBloomAttentionPolicy
+
+    def _init(shape, dtype, attn_op_name, no_dropout=False):
+        config = AutoConfig.from_pretrained("bigscience/bloom-560m")
+        config.hidden_size = shape[2]
+        config.n_head = shape[3]
+        if no_dropout:
+            config.attn_pdrop = 0.0
+            config.resid_pdrop = 0.0
+        attn = BloomAttention(config)
+        if attn_op_name is not None:
+            attn = InjectHFBloomAttentionPolicy.init_from_object(attn, attn_op_name=attn_op_name)
+        if dtype == torch.float16:
+            attn = attn.half()
+        return attn.cuda()
+
+    def gen_inputs(shape, dtype):
+        bs, seq_len, hidden_size, num_heads = shape[:4]
+        hidden_states = torch.randn((bs, seq_len, hidden_size), dtype=dtype, device="cuda")
+        residual = torch.randn((bs, seq_len, hidden_size), dtype=dtype, device="cuda")
+        alibi = torch.randn((bs * num_heads, 1, seq_len), dtype=dtype, device="cuda")
+        attn_mask = torch.triu(
+             torch.ones((seq_len, seq_len), device="cuda"),
+             diagonal=1,
+        )
+        attn_mask = attn_mask[None, None, :, :].expand(bs, 1, -1, -1) > 0.5
+        # (hidden_states, residual, alibi, attn_mask)
+        return [hidden_states, residual, alibi, attn_mask.contiguous()]
+
+    def zero_grad(mod, inputs):
+        inputs[0].grad = None
+        inputs[1].grad = None
+        for param_name in ["query_key_value", "dense", "qkv", "out_proj"]:
+            if hasattr(mod, param_name):
+                getattr(mod, param_name).weight.grad = None
+                getattr(mod, param_name).bias.grad = None
+
+    # (batch, seq, hidden size, #head, vocab size)
+    shapes = [
+        (4, 2048, 1024, 16, 250880), # bloom-560m
+    ]
+    configs = [
+        BenchConfig(
+            partial(_init, attn_op_name=None, no_dropout=True),
+            torch.float16,
+            "HF",
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+            inputs_requires_grad=(True, True, False, ...),
+        ),
+    ]
+
+    fun_attn = _init(shapes[0], configs[0].dtype, None, no_dropout=True)
+    for name in ["native", "cutlass"]:
+        fun_xf = _init(shapes[0], configs[0].dtype, name, no_dropout=True)
+        InjectHFBloomAttentionPolicy.assign_params(fun_xf, fun_attn)
+        config = BenchConfig(
+            partial(_init, attn_op_name=name),
+            torch.float16,
+            name,
+            not args.forward_only,
+            gen_inputs=gen_inputs,
+            zero_grad=zero_grad,
+            inputs_requires_grad=(True, True, False, ...),
+        )
+        correct = check_correctness(
+            shapes[0],
+            fun_attn,
+            fun_xf,
+            config,
+            desc=name,
+            verbose=args.verbose,
+        )
+        if correct is not None:
+            configs.append(config)
+
+    if len(configs) == 1:
+        logger.warning(f"Skip benchmark because no xFormers op is valid")
+        return None
+
+    return bench(
+        shapes,
+        configs,
+        "HF Bloom Attention and xFormer Attention",
+        verbose=args.verbose,
+    )
+
+
 def t5_attention(args):
     torch.manual_seed(42)
     if not is_available("transformers") or not is_available("xformers"):

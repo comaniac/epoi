@@ -20,6 +20,7 @@ class BenchConfig:
     desc: str = "N/A"
     backward: bool = True
     requires_grad: Tuple[bool] = (True, False, ...)
+    inputs_requires_grad: Tuple[bool] = (True, ...)
     gen_inputs: Callable = lambda shape, dtype: [torch.randn(*shape, dtype=dtype, device="cuda")]
     zero_grad: Callable = lambda func, inputs: None
 
@@ -87,6 +88,25 @@ def gen_grad(func, inputs, requires_grad):
         assert requires_grad[0], "Single output must require grad"
         ret = torch.ones_like(out)
     return ret
+
+
+def set_inputs_requires_grad(inputs, inputs_requires_grad):
+    if isinstance(inputs, (list, tuple)):
+        if len(inputs) > len(inputs_requires_grad) - 1:
+            if not isinstance(inputs_requires_grad[-1], type(...)):
+                raise ValueError(
+                    "inputs_requires_grad must have the same length as inputs, "
+                    "or the end with '...' to repeat the last value."
+                )
+            else:
+                inputs_requires_grad = expand_requires_grad(inputs_requires_grad, len(inputs))
+        for inp, requires_grad in zip(inputs, inputs_requires_grad):
+            if inp is not None:
+                inp.requires_grad = requires_grad and (inp.dtype in (torch.float32, torch.float16))
+    else:
+        assert inputs_requires_grad[0], "Single input must require grad"
+        inputs.requires_grad = True
+
 
 
 def _forward_only(func, inputs, grad=None, zero_grad_fn=None):
@@ -177,9 +197,7 @@ def bench(shapes, configs, label, verbose=False):
             if config.backward:
                 global_dict["_run"] = _forward_backward
                 global_dict["grad"] = gen_grad(func, inputs, config.requires_grad)
-                for inp in inputs:
-                    if inp is not None:
-                        inp.requires_grad = inp.dtype in (torch.float32, torch.float16)
+                set_inputs_requires_grad(inputs, config.inputs_requires_grad)
                 if hasattr(func, "train"):
                     func.train()
 
@@ -238,12 +256,10 @@ def check_correctness(
         return None
 
     if config.backward:
-        for inp in inputs:
-            if inp is not None:
-                inp.requires_grad = inp.dtype in (torch.float32, torch.float16)
+        set_inputs_requires_grad(inputs, config.inputs_requires_grad)
         grads_input = gen_grad(func_ref, inputs, config.requires_grad)
         out_ref = _forward_backward(func_ref, inputs, grads_input)
-        grads_ref = [inp.grad for inp in inputs if inp is not None]
+        grads_ref = [inp.grad for inp in inputs if (inp is not None) and inp.requires_grad]
         config.zero_grad(func_ref, inputs)
 
         if skip_if(
@@ -252,7 +268,7 @@ def check_correctness(
         ):
             return None
         out = _forward_backward(func, inputs, grads_input)
-        grads = [inp.grad for inp in inputs if inp is not None]
+        grads = [inp.grad for inp in inputs if (inp is not None) and inp.requires_grad]
         config.zero_grad(func, inputs)
     else:
         out_ref = _forward_only(func_ref, inputs)

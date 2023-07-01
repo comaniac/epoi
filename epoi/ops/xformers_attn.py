@@ -98,6 +98,11 @@ class MemoryEfficientAttentionOp(nn.Module):
             attn_bias = xformers_ops.fmha.attn_bias.LowerTriangularMask()
             if attention_mask is not None:
                 attn_bias = attn_bias.add_bias(attention_mask)
+                attn_bias = attn_bias.materialize(
+                                (1, 1, query_layer.shape[1], query_layer.shape[1]),
+                                dtype=query_layer.dtype,
+                                device=query_layer.device,
+                            )
         else:
             attn_bias = attention_mask
 
@@ -304,6 +309,77 @@ class GPT2AttentionWithXF(nn.Module):
             use_cache,
             output_attentions,
         )
+
+
+class BloomAttentionWithXF(GenericSelfAttention):
+    """HuggingFace's BloomAttention to use xformers' attention ops."""
+    def __init__(
+        self,
+        hidden_size,
+        num_attention_heads,
+        attn_pdrop=0.0,
+        resid_pdrop=0.0,
+        attn_op_name="auto",
+    ):
+        super().__init__(
+            hidden_size,
+            num_attention_heads,
+            True,  # is_decoder
+            attn_pdrop,
+            resid_pdrop,
+            attn_op_name,
+            True,  # fused_qkv
+        )
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        residual: torch.Tensor,
+        alibi: torch.Tensor,
+        attention_mask: torch.Tensor,
+        layer_past: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+        head_mask: Optional[torch.Tensor] = None,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
+    ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
+        assert head_mask is None, "head_mask is not supported"
+        assert not output_attentions, "output_attentions is not supported"
+        if attention_mask is not None:
+            print_once(
+                "WARNING: The given mask will be ignored and built-in causal mask will be applied"
+            )
+        fused_qkv = self.qkv(hidden_states)
+        bs, seq_len, _ = fused_qkv.shape
+        fused_qkv = fused_qkv.view(bs, seq_len, self.num_attention_heads, -1)
+        query_layer, key_layer, value_layer = fused_qkv.split(self.attention_head_size, dim=3)
+
+        if layer_past is not None:
+            past_key, past_value = layer_past
+            key_layer = torch.cat((past_key, key_layer), dim=-2)
+            value_layer = torch.cat((past_value, value_layer), dim=-2)
+
+        new_shape = (bs, self.num_attention_heads) + alibi.size()[1:]
+        attn_bias = self.layout_attention_mask(alibi.view(new_shape), self.num_attention_heads)
+
+        context_layer = self.attn_op(
+            query_layer.contiguous(),
+            key_layer.contiguous(),
+            value_layer.contiguous(),
+            attn_bias,
+            p=self.attn_pdrop,
+        )
+        context_layer = context_layer.contiguous()
+        new_context_layer_shape = context_layer.size()[:-2] + (-1,)
+        context_layer = context_layer.view(new_context_layer_shape)
+
+        context_layer = self.out_proj(context_layer)
+        context_layer = self.resid_dropout(context_layer) + residual
+
+        if use_cache:
+            outputs = (context_layer, (key_layer, value_layer))
+        else:
+            outputs = (context_layer, None)
+        return outputs
 
 
 class RelativeBias(nn.Module):
