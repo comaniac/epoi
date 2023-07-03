@@ -108,6 +108,8 @@ class InjectHFBertOutputPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def assign_params(this, orig, **kwargs):
+        this.dense.weight = orig.dense.weight
+        this.dense.bias = orig.dense.bias
         this.fused_op.layer_norm.weight = orig.LayerNorm.weight
         this.fused_op.layer_norm.bias = orig.LayerNorm.bias
 
@@ -138,3 +140,25 @@ class InjectHFBertOutputPolicy(ModuleInjectPolicy):
                 return hidden_states
 
         return FusedBertOutput
+
+    @staticmethod
+    def load_state_dict_post_hook(state_dict):
+        new_names = []
+        old_names = []
+        replace_rules = [
+            ("output.LayerNorm.gamma", "LayerNorm.gamma", "fused_op.layer_norm.weight"),
+            ("output.LayerNorm.beta", "LayerNorm.beta", "fused_op.layer_norm.bias"),
+        ]
+        for name in state_dict.keys():
+            new_name = None
+            for rule in replace_rules:
+                if rule[0] in name and "attention" not in name:
+                    new_name = name.replace(rule[1], rule[2])
+            if new_name:
+                new_names.append(new_name)
+                old_names.append(name)
+
+        for old_name, new_name in zip(old_names, new_names):
+            state_dict[new_name] = state_dict.pop(old_name)
+
+        return state_dict

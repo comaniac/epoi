@@ -165,6 +165,38 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
 
         return wrapped_forward
 
+    @staticmethod
+    def load_state_dict_post_hook(state_dict):
+        new_names = []
+        old_names = []
+        replace_rules = [
+            # GPT-2
+            ("attn.c_attn.weight", "c_attn", "qkv"),
+            ("attn.c_attn.bias", "c_attn", "qkv"),
+            ("attn.c_proj", "c_proj", "out_proj"),
+            # GPTNeo, GPTJ
+            ("attn.c_attn.q_proj", "q_proj", "query"),
+            ("attn.c_attn.k_proj", "k_proj", "key"),
+            ("attn.c_attn.v_proj", "v_proj", "value"),
+        ]
+        for name in state_dict.keys():
+            new_name = None
+            for rule in replace_rules:
+                if rule[0] in name:
+                    new_name = name.replace(rule[1], rule[2])
+            if new_name:
+                new_names.append(new_name)
+                old_names.append(name)
+
+        for old_name, new_name in zip(old_names, new_names):
+            param = state_dict.pop(old_name)
+            if "attn.c_attn.weight" in old_name or "attn.c_proj.weight" in old_name:
+                state_dict[new_name] = param.transpose(-1, 0).contiguous()
+            else:
+                state_dict[new_name] = param
+
+        return state_dict
+
 
 class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
     @staticmethod
@@ -288,3 +320,36 @@ class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
             "resid_pdrop": resid_pdrop,
         }
         return new_args
+
+    @staticmethod
+    def load_state_dict_post_hook(state_dict):
+        new_names = []
+        old_names = []
+        replace_rules = [
+            # GPT-2, GPTNeo
+            ("mlp.c_fc.weight", "c_fc", "fc_in"),
+            ("mlp.c_fc.bias", "c_fc", "act"),
+            ("mlp.c_proj", "c_proj", "fc_out"),
+            # GPTJ
+            ("mlp.fc_in.bias", "fc_in", "act"),
+        ]
+        is_gpt2 = False
+        for name in state_dict.keys():
+            new_name = None
+            # a trick to see whether the target model is GPT-2...
+            is_gpt2 |= ("attn.c_attn.weight" in name or "attn.qkv" in name)
+            for rule in replace_rules:
+                if rule[0] in name:
+                    new_name = name.replace(rule[1], rule[2])
+            if new_name:
+                new_names.append(new_name)
+                old_names.append(name)
+
+        for old_name, new_name in zip(old_names, new_names):
+            param = state_dict.pop(old_name)
+            if is_gpt2 and ("mlp.c_fc.weight" in old_name or "mlp.c_proj.weight" in old_name):
+                state_dict[new_name] = param.transpose(-1, 0).contiguous()
+            else:
+                state_dict[new_name] = param
+
+        return state_dict

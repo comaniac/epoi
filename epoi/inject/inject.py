@@ -50,14 +50,35 @@ class InjectModuleContext:
         for policy_cls in policies if policies is not None else get_activate_policies():
             self.policies.append(policy_cls())
         self.record = {}
+        self.load_state_dict_backup = None
 
     def __enter__(self):
         for policy in self.policies:
             policy.hook(self)
+        self.inject_load_state_dict()
+
+    def inject_load_state_dict(self):
+        import transformers.modeling_utils
+        self.load_state_dict_backup = transformers.modeling_utils.load_state_dict
+
+        def wrap_load_state_dict(orig_load_func, policies):
+            def wrap_load_func(*args, **kwargs):
+                state_dict = orig_load_func(*args, **kwargs)
+                for policy in policies:
+                    state_dict = policy.load_state_dict_post_hook(state_dict)
+                return state_dict
+            return wrap_load_func
+
+        transformers.modeling_utils.load_state_dict = \
+            wrap_load_state_dict(self.load_state_dict_backup, self.policies)
 
     def __exit__(self, exc_type, exc_value, traceback):
         for policy in self.policies:
             policy.unhook()
+
+        if self.load_state_dict_backup:
+            import transformers.modeling_utils
+            transformers.modeling_utils.load_state_dict = self.load_state_dict_backup
 
         if self.record:
             for msg, count in self.record.items():
