@@ -38,16 +38,16 @@ class InjectHFT5AttentionPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def assign_params(this, orig, **kwargs):
-        this.query.weight = orig.q.weight
-        this.query.bias = orig.q.bias
-        this.key.weight = orig.k.weight
-        this.key.bias = orig.k.bias
-        this.value.weight = orig.v.weight
-        this.value.bias = orig.v.bias
-        this.out.weight = orig.o.weight
-        this.out.bias = orig.o.bias
+        this.q.weight = orig.q.weight
+        this.q.bias = orig.q.bias
+        this.k.weight = orig.k.weight
+        this.k.bias = orig.k.bias
+        this.v.weight = orig.v.weight
+        this.v.bias = orig.v.bias
+        this.o.weight = orig.o.weight
+        this.o.bias = orig.o.bias
         if hasattr(orig, "relative_attention_bias"):
-            this.relative_attention_bias.embeddings.weight = (
+            this.relative_attention_bias.weight = (
                 orig.relative_attention_bias.weight
             )
 

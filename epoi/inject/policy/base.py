@@ -102,3 +102,8 @@ class ModuleInjectPolicy:
     def gen_wrap_forward(orig_cls, forward):
         """Generate a wrapper to wrap the inject module's forward function."""
         return forward
+
+    @staticmethod
+    def load_state_dict_post_hook(state_dict):
+        """Rename the parameters in the state_dict for the injected modules"""
+        return state_dict

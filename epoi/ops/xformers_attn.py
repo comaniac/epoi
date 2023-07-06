@@ -391,7 +391,6 @@ class RelativeBias(nn.Module):
         self.relative_attention_max_distance = relative_attention_max_distance
         self.n_heads = n_heads
         self.is_decoder = is_decoder
-        self.embeddings = nn.Embedding(self.relative_attention_num_buckets, self.n_heads)
 
     @staticmethod
     def _relative_position_bucket(
@@ -440,7 +439,7 @@ class RelativeBias(nn.Module):
         relative_buckets += torch.where(is_small, relative_position, relative_position_if_large)
         return relative_buckets
 
-    def forward(self, query_length, key_length, device):
+    def forward(self, embeddings, query_length, key_length, device):
         """Compute binned relative position bias"""
         context_position = torch.arange(query_length, dtype=torch.long, device=device)[:, None]
         memory_position = torch.arange(key_length, dtype=torch.long, device=device)[None, :]
@@ -451,7 +450,7 @@ class RelativeBias(nn.Module):
             num_buckets=self.relative_attention_num_buckets,
             max_distance=self.relative_attention_max_distance,
         )
-        values = self.embeddings(
+        values = embeddings(
             relative_position_bucket
         )  # shape (query_length, key_length, num_heads)
         values = values.permute([2, 0, 1]).unsqueeze(
@@ -504,13 +503,14 @@ class T5Attention(nn.Module):
         self.inner_dim = self.n_heads * self.key_value_proj_dim
 
         # Mesh TensorFlow initialization to avoid scaling before softmax
-        self.query = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.key = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.value = nn.Linear(self.d_model, self.inner_dim, bias=False)
-        self.out = nn.Linear(self.inner_dim, self.d_model, bias=False)
+        self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.k = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.v = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.o = nn.Linear(self.inner_dim, self.d_model, bias=False)
 
         if self.has_relative_attention_bias:
-            self.relative_attention_bias = RelativeBias(
+            self.relative_attention_bias = nn.Embedding(self.relative_attention_num_buckets, self.n_heads)
+            self.compute_bias = RelativeBias(
                 self.relative_attention_num_buckets,
                 self.relative_attention_max_distance,
                 self.n_heads,
@@ -589,19 +589,19 @@ class T5Attention(nn.Module):
 
         # get query states
         query_states = shape(
-            self.query(hidden_states)
+            self.q(hidden_states)
         )  # (batch_size, seq_length, n_heads, dim_per_head)
 
         # get key/value states
         key_states = project(
             hidden_states,
-            self.key,
+            self.k,
             key_value_states,
             past_key_value[0] if past_key_value is not None else None,
         )
         value_states = project(
             hidden_states,
-            self.value,
+            self.v,
             key_value_states,
             past_key_value[1] if past_key_value is not None else None,
         )
@@ -610,8 +610,8 @@ class T5Attention(nn.Module):
             if not self.has_relative_attention_bias:
                 position_bias = self.zero_bias_like(real_seq_length, key_length, hidden_states)
             else:
-                position_bias = self.relative_attention_bias(
-                    real_seq_length, key_length, hidden_states.device
+                position_bias = self.compute_bias(
+                    self.relative_attention_bias, real_seq_length, key_length, hidden_states.device,
                 )
 
             # if key and values are already calculated
@@ -632,7 +632,7 @@ class T5Attention(nn.Module):
 
         attn_output = self.attn_op(query_states, key_states, value_states, new_mask, p=self.dropout)
         attn_output = unshape(attn_output)
-        attn_output = self.out(attn_output)
+        attn_output = self.o(attn_output)
 
         present_key_value_state = (
             (key_states, value_states) if (self.is_decoder and use_cache) else None

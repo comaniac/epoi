@@ -48,6 +48,26 @@ class InjectHFBloomAttentionPolicy(ModuleInjectPolicy):
         """The custom module to inject."""
         return BloomAttentionWithXF
 
+    @staticmethod
+    def load_state_dict_post_hook(state_dict):
+        name_pairs = []
+        replace_rules = [
+            ("self_attention.query_key_value", "query_key_value", "qkv"),
+            ("self_attention.dense", "dense", "out_proj"),
+        ]
+        for name in state_dict.keys():
+            new_name = None
+            for rule in replace_rules:
+                if rule[0] in name:
+                    new_name = name.replace(rule[1], rule[2])
+            if new_name is not None:
+                name_pairs.append((name, new_name))
+
+        for old_name, new_name in name_pairs:
+            state_dict[new_name] = state_dict.pop(old_name)
+
+        return state_dict
+
 
 class InjectHFBloomMLPPolicy(ModuleInjectPolicy):
     @staticmethod
@@ -97,8 +117,28 @@ class InjectHFBloomMLPPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def gen_init_config_from_config(*args, **kwargs):
+        config = args[0]
         new_args = {
             "hidden_size": config.hidden_size,
             "hidden_dropout": config.hidden_dropout,
         }
         return new_args
+
+    @staticmethod
+    def load_state_dict_post_hook(state_dict):
+        name_pairs = []
+        replace_rules = [
+            ("mlp.dense_h_to_4h.bias", "dense_h_to_4h", "act"),
+        ]
+        for name in state_dict.keys():
+            new_name = None
+            for rule in replace_rules:
+                if rule[0] in name:
+                    new_name = name.replace(rule[1], rule[2])
+            if new_name is not None:
+                name_pairs.append((name, new_name))
+
+        for old_name, new_name in name_pairs:
+            state_dict[new_name] = state_dict.pop(old_name)
+
+        return state_dict
