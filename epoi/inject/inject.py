@@ -69,6 +69,9 @@ class InjectModuleContext:
                 return state_dict
             return wrap_load_func
 
+        # Different policies may conflict with each other in the way they modify the state dict.
+        # HF will give detailed warnings later if there is any any mismatch
+        # between the state_dict and the model parameters.
         transformers.modeling_utils.load_state_dict = \
             wrap_load_state_dict(self.load_state_dict_backup, self.policies)
 
@@ -76,7 +79,7 @@ class InjectModuleContext:
         for policy in self.policies:
             policy.unhook()
 
-        if self.load_state_dict_backup:
+        if self.load_state_dict_backup is not None:
             import transformers.modeling_utils
             transformers.modeling_utils.load_state_dict = self.load_state_dict_backup
 

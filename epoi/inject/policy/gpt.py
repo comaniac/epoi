@@ -167,8 +167,7 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def load_state_dict_post_hook(state_dict):
-        new_names = []
-        old_names = []
+        name_pairs = []
         replace_rules = [
             # GPT-2
             ("attn.c_attn.weight", "c_attn", "qkv"),
@@ -184,11 +183,10 @@ class InjectHFGPTAttentionPolicy(ModuleInjectPolicy):
             for rule in replace_rules:
                 if rule[0] in name:
                     new_name = name.replace(rule[1], rule[2])
-            if new_name:
-                new_names.append(new_name)
-                old_names.append(name)
+            if new_name is not None:
+                name_pairs.append((name, new_name))
 
-        for old_name, new_name in zip(old_names, new_names):
+        for old_name, new_name in name_pairs:
             param = state_dict.pop(old_name)
             if "attn.c_attn.weight" in old_name or "attn.c_proj.weight" in old_name:
                 state_dict[new_name] = param.transpose(-1, 0).contiguous()
@@ -323,8 +321,7 @@ class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def load_state_dict_post_hook(state_dict):
-        new_names = []
-        old_names = []
+        name_pairs = []
         replace_rules = [
             # GPT-2, GPTNeo
             ("mlp.c_fc.weight", "c_fc", "fc_in"),
@@ -341,11 +338,10 @@ class InjectHFGPTMLPPolicy(ModuleInjectPolicy):
             for rule in replace_rules:
                 if rule[0] in name:
                     new_name = name.replace(rule[1], rule[2])
-            if new_name:
-                new_names.append(new_name)
-                old_names.append(name)
+            if new_name is not None:
+                name_pairs.append((name, new_name))
 
-        for old_name, new_name in zip(old_names, new_names):
+        for old_name, new_name in name_pairs:
             param = state_dict.pop(old_name)
             if is_gpt2 and ("mlp.c_fc.weight" in old_name or "mlp.c_proj.weight" in old_name):
                 state_dict[new_name] = param.transpose(-1, 0).contiguous()

@@ -143,8 +143,7 @@ class InjectHFBertOutputPolicy(ModuleInjectPolicy):
 
     @staticmethod
     def load_state_dict_post_hook(state_dict):
-        new_names = []
-        old_names = []
+        name_pairs = []
         replace_rules = [
             ("output.LayerNorm.gamma", "LayerNorm.gamma", "fused_op.layer_norm.weight"),
             ("output.LayerNorm.beta", "LayerNorm.beta", "fused_op.layer_norm.bias"),
@@ -154,11 +153,10 @@ class InjectHFBertOutputPolicy(ModuleInjectPolicy):
             for rule in replace_rules:
                 if rule[0] in name and "attention" not in name:
                     new_name = name.replace(rule[1], rule[2])
-            if new_name:
-                new_names.append(new_name)
-                old_names.append(name)
+            if new_name is not None:
+                name_pairs.append((name, new_name))
 
-        for old_name, new_name in zip(old_names, new_names):
+        for old_name, new_name in name_pairs:
             state_dict[new_name] = state_dict.pop(old_name)
 
         return state_dict
